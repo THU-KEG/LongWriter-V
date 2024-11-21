@@ -1,46 +1,13 @@
+from inference.api import GPT_Interface
+from .eval import eval_metrics
 from pymongo import MongoClient
-from utils import LLM_Interface
 import os
 from tqdm import tqdm
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import List
 
 collection = MongoClient(
     port=27017
 ).maic["agenda"]
 
-app = FastAPI()
-
-class PolishRequest(BaseModel):
-    imgs: List[str] = Field(..., description="List of base64 encoded images")
-    scripts: List[str] = Field(..., description="List of corresponding scripts")
-    course_name: str = Field(..., min_length=1, description="Name of the course")
-    chapter_name: str = Field(..., min_length=1, description="Name of the chapter")
-
-class PolishResponse(BaseModel):
-    success: bool
-    script: str | None = None
-    error: str | None = None
-
-@app.post("/polish", response_model=PolishResponse)
-async def polish_endpoint(request: PolishRequest):
-    try:
-        if len(request.imgs) == 0 or len(request.scripts) == 0:
-            raise ValueError("Images and scripts lists cannot be empty")
-            
-        if len(request.imgs) != len(request.scripts) + 1:
-            raise ValueError("Number of images should be equal to number of scripts + 1")
-
-        result = polish(
-            imgs=request.imgs,
-            scripts=request.scripts,
-            course_name=request.course_name,
-            chapter_name=request.chapter_name
-        )
-        return PolishResponse(success=True, script=result)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 def get_online_scripts(chapter_id: str, output_dir):
     agendas = list(collection.find({"chapter_id": chapter_id}))
@@ -61,6 +28,7 @@ def get_online_scripts(chapter_id: str, output_dir):
                     value = dict(f["value"])
                     with open(f"{output_dir}/{idx}.txt", "w") as f:
                         f.write(value["script"])
+
 
 def encode_images_to_base64(img_dir):
     import os
@@ -87,7 +55,7 @@ def plan(img_dir):
     """
     image_urls = encode_images_to_base64(img_dir)
     
-    response = LLM_Interface.call_gpt4v(
+    response = GPT_Interface.call_gpt4o(
         messages=[
             dict(
                 role="user",
@@ -109,8 +77,6 @@ def plan(img_dir):
 def polish(imgs, scripts, course_name, chapter_name):
     prompt = """你是一名出色的教师。你需要根据聊天历史中的来自{}课程的{}章节的PPT的图片和讲稿对，来学习如何解读PPT并生成讲稿。然后，请你为当前PPT图片生成一段讲稿。请仔细观察示例中的讲稿是如何描述和解释PPT内容的，尽可能模仿示例的语言风格和解读方式，包括语气、详细程度、专业术语的使用等特点。并且保证讲稿的内容与PPT图片内容的一致性，可以流畅、连贯地衔接在上一张PPT的讲稿后面，在同一堂课中由老师在课堂上直接进行授课讲解；最后，讲稿需要有一定的启发性和教育意义，能够激发学生的学习兴趣和思考。请直接输出讲稿内容，不要输出任何其他内容。
     """.format(course_name, chapter_name)
-    print(len(imgs), len(scripts))
-    print(scripts)
     messages = []
     
     # Add example image-script pairs to chat history
@@ -139,7 +105,7 @@ def polish(imgs, scripts, course_name, chapter_name):
         )
     )
 
-    response = LLM_Interface.call_gpt4v(messages=messages)
+    response = GPT_Interface.call_gpt4v(messages=messages)
     return response
 
 
@@ -174,21 +140,21 @@ def get_scripts(txt_path):
             scripts.append(f.read())
     return scripts
 
-def polish_k_shot(k, imgs, scripts, course_name, chapter_name, output_dir):
-    window_length = 10 
+
+def polish_k_shot(k, imgs, scripts, course_name, chapter_name, output_dir, window_length=10):
+    os.makedirs(output_dir, exist_ok=True)
     history = scripts[:k]
+    results = []
     for i in range(k):
         with open(f"{output_dir}/{i+1}.txt", "w") as f:
             f.write(history[i])
+        results.append(history[i])
     for i in tqdm(range(k, len(imgs))):
+        hist_imgs = imgs[:i][-min(window_length, len(imgs[:i+1])):]
+        res = polish(hist_imgs + [imgs[i]], history, course_name, chapter_name)
         with open(f"{output_dir}/{i+1}.txt", "w") as f:
-            hist_imgs = imgs[:i][-min(window_length, len(imgs[:i+1])):]
-            res = polish(hist_imgs + [imgs[i]], history, course_name, chapter_name)
             f.write(res)
-            print(res, flush=True)
-            history.append(res)
-            history = history[-min(window_length, len(history)):]
-    
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        results.append(res)
+        history.append(res)
+        history = history[-min(window_length, len(history)):]
+    return results

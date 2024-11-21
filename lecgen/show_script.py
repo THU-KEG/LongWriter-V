@@ -228,10 +228,17 @@ class ScriptViewer:
             value=1
         )
         
+        # Check if script directories have changed
+        old_script_dirs = getattr(st.session_state, 'script_dirs', [])
         script_dirs = [
             st.sidebar.text_input(f"Script Directory {i+1}:")
             for i in range(num_script_dirs)
         ]
+        
+        # If script directories changed, clear the scripts state
+        if old_script_dirs != script_dirs:
+            st.session_state.scripts = {}
+            st.session_state.modified_scripts = set()
         
         # Add course and chapter name inputs
         st.sidebar.header("Metadata")
@@ -275,7 +282,7 @@ class ScriptViewer:
             cols = st.columns([1] + [2] * len(script_paths))
             
             with cols[0]:
-                st.image(str(image_file), use_column_width=True)
+                st.image(str(image_file), use_container_width=True)
             
             for j, scripts in enumerate(script_collections):
                 with cols[j + 1]:
