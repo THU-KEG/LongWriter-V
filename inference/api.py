@@ -10,7 +10,14 @@ class GPT_Interface:
     
     # Initialize cache in project root directory
     cache_dir = Path(__file__).parent.parent / ".cache"
-    cache = Cache(str(cache_dir))
+    try:
+        cache = Cache(str(cache_dir), timeout=1, disk_min_file_size=0)
+    except Exception as e:
+        print(f"Warning: Cache initialization failed: {str(e)}")
+        # Fallback to a temporary directory if main cache fails
+        import tempfile
+        temp_cache_dir = Path(tempfile.gettempdir()) / ".cache_fallback"
+        cache = Cache(str(temp_cache_dir), timeout=1, disk_min_file_size=0)
     
     # Load config file
     config_path = Path(__file__).parent.parent / "config.json"

@@ -5,3 +5,7 @@ __pycache__
 config.json
 
 outputs/*
+environments
+logs
+data
+ppt2png

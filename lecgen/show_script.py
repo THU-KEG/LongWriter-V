@@ -279,6 +279,9 @@ class ScriptViewer:
             return
             
         for i, image_file in enumerate(images):
+            # Add index display (i + 1 for 1-based indexing)
+            st.markdown(f"**#{i + 1}**")
+            
             cols = st.columns([1] + [2] * len(script_paths))
             
             with cols[0]:

@@ -1,4 +1,7 @@
 from inference.api import GPT_Interface
+import io
+import base64
+from PIL import Image
 from .eval import eval_metrics
 from pymongo import MongoClient
 import os
@@ -31,9 +34,6 @@ def get_online_scripts(chapter_id: str, output_dir):
 
 
 def encode_images_to_base64(img_dir):
-    import os
-    import base64
-    
     image_files = os.listdir(img_dir)
     image_files = sorted(image_files, key=lambda x: int(x.split("/")[-1].split('.')[0]))
     image_urls = []
@@ -45,6 +45,16 @@ def encode_images_to_base64(img_dir):
             image_urls.append(image_url)
     
     return image_urls
+
+def encode_images_to_pil(img_dir):
+    image_files = os.listdir(img_dir)
+    image_files = sorted(image_files, key=lambda x: int(x.split("/")[-1].split('.')[0]))
+    images = []
+    
+    for filename in image_files:
+        images.append(Image.open(os.path.join(img_dir, filename)).convert("RGB"))
+    
+    return images
 
 def plan(img_dir):
     prompt = """你是一名出色的教师。你的任务是根据PPT内容，为每个页面生成一个教学大纲。请以以下格式输出：
@@ -158,3 +168,15 @@ def polish_k_shot(k, imgs, scripts, course_name, chapter_name, output_dir, windo
         history.append(res)
         history = history[-min(window_length, len(history)):]
     return results
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+    img_path = Path(__file__).parent.parent / 'data/bio2/pngs'
+    script_path = Path(__file__).parent.parent / 'data/bio2/scripts_online'
+    imgs = encode_images_to_base64(img_path)
+    scripts = get_scripts(script_path)
+    course_name = "现代生物学导论"
+    chapter_name = "第2讲"
+    k = 3
+    polish_k_shot(k, imgs, scripts, course_name, chapter_name, f"data/bio2/results_{k}")
