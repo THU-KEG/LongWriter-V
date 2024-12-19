@@ -1,4 +1,4 @@
-from utils.eval import calculate_metrics
+from utils import cal_text_metrics
 import os
 from pathlib import Path
 from PIL import Image
@@ -28,7 +28,7 @@ def eval_metrics(references: List[str], hypotheses: List[str], output_path: str 
         
     scores = []
     for ref, hyp in tqdm(zip(references, hypotheses), total=len(references), desc="Calculating metrics"):
-        scores.append(calculate_metrics(ref, hyp))
+        scores.append(cal_text_metrics(ref, hyp))
     
     # Calculate averages
     avg_scores = {}

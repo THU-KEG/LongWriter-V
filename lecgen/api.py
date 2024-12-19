@@ -8,8 +8,6 @@ app = FastAPI()
 class PolishRequest(BaseModel):
     imgs: List[str] = Field(..., description="List of base64 encoded images")
     scripts: List[str] = Field(..., description="List of corresponding scripts")
-    course_name: str = Field(..., min_length=1, description="Name of the course")
-    chapter_name: str = Field(..., min_length=1, description="Name of the chapter")
 
 class PolishResponse(BaseModel):
     success: bool
@@ -28,8 +26,6 @@ async def polish_endpoint(request: PolishRequest):
         result = polish(
             imgs=request.imgs,
             scripts=request.scripts,
-            course_name=request.course_name,
-            chapter_name=request.chapter_name
         )
         return PolishResponse(success=True, script=result)
     except Exception as e:

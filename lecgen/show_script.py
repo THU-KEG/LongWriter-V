@@ -71,8 +71,7 @@ class ScriptViewer:
             st.error(f"Error processing script directory: {str(e)}")
             return []
 
-    async def polish_script(self, images: List[Path], previous_scripts: List[str],
-                          course_name: str, chapter_name: str) -> Optional[str]:
+    async def polish_script(self, images: List[Path], previous_scripts: List[str]) -> Optional[str]:
         """Call API to polish script with improved error handling"""
         try:
             encoded_imgs = [self._encode_image(img) for img in images]
@@ -83,11 +82,9 @@ class ScriptViewer:
                         "http://0.0.0.0:8000/polish",
                         json={
                             "imgs": encoded_imgs,
-                            "scripts": previous_scripts,
-                            "course_name": course_name,
-                            "chapter_name": chapter_name
+                            "scripts": previous_scripts
                         },
-                        timeout=60.0
+                        timeout=120.0
                     )
                     
                     if response.status_code == 422:
@@ -181,13 +178,11 @@ class ScriptViewer:
             if script_key in st.session_state.scripts:
                 previous_scripts.append(st.session_state.scripts[script_key])
         
-        # Call polish API with course and chapter names from session state
+        # Call polish API
         with st.spinner("Polishing script..."):
             result = asyncio.run(self.polish_script(
                 images=context_images,
-                previous_scripts=previous_scripts,
-                course_name=st.session_state.get('course_name', ''),
-                chapter_name=st.session_state.get('chapter_name', '')
+                previous_scripts=previous_scripts
             ))
             
             if result:
@@ -240,16 +235,9 @@ class ScriptViewer:
             st.session_state.scripts = {}
             st.session_state.modified_scripts = set()
         
-        # Add course and chapter name inputs
-        st.sidebar.header("Metadata")
-        course_name = st.sidebar.text_input("Course Name:")
-        chapter_name = st.sidebar.text_input("Chapter Name:")
-        
         # Store in session state
         st.session_state.image_dir = image_dir
         st.session_state.script_dirs = script_dirs
-        st.session_state.course_name = course_name
-        st.session_state.chapter_name = chapter_name
 
     def validate_inputs(self) -> bool:
         """Validate input directories"""

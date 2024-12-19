@@ -1,6 +1,5 @@
 from inference.api import GPT_Interface
-import io
-import base64
+from utils import encode_images_to_base64
 from PIL import Image
 from .eval import eval_metrics
 from pymongo import MongoClient
@@ -32,19 +31,6 @@ def get_online_scripts(chapter_id: str, output_dir):
                     with open(f"{output_dir}/{idx}.txt", "w") as f:
                         f.write(value["script"])
 
-
-def encode_images_to_base64(img_dir):
-    image_files = os.listdir(img_dir)
-    image_files = sorted(image_files, key=lambda x: int(x.split("/")[-1].split('.')[0]))
-    image_urls = []
-    
-    for filename in image_files:
-        with open(os.path.join(img_dir, filename), 'rb') as f:
-            image_data = f.read()
-            image_url = base64.b64encode(image_data).decode('utf-8')
-            image_urls.append(image_url)
-    
-    return image_urls
 
 def encode_images_to_pil(img_dir):
     image_files = os.listdir(img_dir)
@@ -84,9 +70,25 @@ def plan(img_dir):
     return response
 
 
-def polish(imgs, scripts, course_name, chapter_name):
-    prompt = """你是一名出色的教师。你需要根据聊天历史中的来自{}课程的{}章节的PPT的图片和讲稿对，来学习如何解读PPT并生成讲稿。然后，请你为当前PPT图片生成一段讲稿。请仔细观察示例中的讲稿是如何描述和解释PPT内容的，尽可能模仿示例的语言风格和解读方式，包括语气、详细程度、专业术语的使用等特点。并且保证讲稿的内容与PPT图片内容的一致性，可以流畅、连贯地衔接在上一张PPT的讲稿后面，在同一堂课中由老师在课堂上直接进行授课讲解；最后，讲稿需要有一定的启发性和教育意义，能够激发学生的学习兴趣和思考。请直接输出讲稿内容，不要输出任何其他内容。
-    """.format(course_name, chapter_name)
+def polish(imgs, scripts):
+    prompt = """You are an excellent teacher. Based on the chat history containing slide images and scripts, learn how to interpret slides and generate teaching scripts. Then, generate a script for the current slide image.
+
+Please carefully observe how the example scripts describe and explain the slide content, and emulate their style of presentation, including tone, level of detail, use of technical terminology, and overall approach. 
+
+Ensure that:
+1. The script content accurately matches the slide content
+2. It flows smoothly and connects logically with the script from the previous slide
+3. It is suitable for direct classroom delivery
+4. It has educational value and engages students by:
+   - Encouraging critical thinking
+   - Sparking interest in the subject
+   - Making complex concepts accessible
+   - Fostering active participation
+
+Important: Generate the script in the same language as the slide content - use Chinese if the slides are in Chinese, or English if the slides are in English.
+
+Please output only the script content, with no additional text or formatting.
+    """
     messages = []
     
     # Add example image-script pairs to chat history
@@ -115,8 +117,8 @@ def polish(imgs, scripts, course_name, chapter_name):
         )
     )
 
-    response = GPT_Interface.call_gpt4v(messages=messages)
-    return response
+    response = GPT_Interface.call_gpt4o(messages=messages, use_cache=False)
+    return response[0]
 
 
 def get_old_scripts(txt_path, output_dir):
@@ -161,7 +163,7 @@ def polish_k_shot(k, imgs, scripts, course_name, chapter_name, output_dir, windo
         results.append(history[i])
     for i in tqdm(range(k, len(imgs))):
         hist_imgs = imgs[:i][-min(window_length, len(imgs[:i+1])):]
-        res = polish(hist_imgs + [imgs[i]], history, course_name, chapter_name)
+        res = polish(hist_imgs + [imgs[i]], history)
         with open(f"{output_dir}/{i+1}.txt", "w") as f:
             f.write(res)
         results.append(res)
@@ -170,13 +172,48 @@ def polish_k_shot(k, imgs, scripts, course_name, chapter_name, output_dir, windo
     return results
 
 
-if __name__ == "__main__":
-    from pathlib import Path
-    img_path = Path(__file__).parent.parent / 'data/bio2/pngs'
-    script_path = Path(__file__).parent.parent / 'data/bio2/scripts_online'
-    imgs = encode_images_to_base64(img_path)
-    scripts = get_scripts(script_path)
-    course_name = "现代生物学导论"
-    chapter_name = "第2讲"
-    k = 3
-    polish_k_shot(k, imgs, scripts, course_name, chapter_name, f"data/bio2/results_{k}")
+def extract_style(imgs, scripts):
+    prompt = """你是一名出色的讲稿风格分析专家，请根据老师在课堂上讲课的PPT图片和讲稿，分析老师的讲课风格，包括语气、详细程度、专业术语的使用等特点。你需要尽可能详细地进行分析，并使你的分析结果可以用作生成讲稿的参考风格。请直接输出分析结果，不要输出任何其他内容。"""
+    messages = []
+    for img, script in zip(imgs, scripts):
+        messages.extend([
+            dict(role="user", content=[dict(type="image_url", image_url=dict(url=f"data:image/png;base64,{img}"))]),
+            dict(role="assistant", content=script)
+        ])
+    messages.append(dict(role="user", content=prompt))
+    response = GPT_Interface.call_gpt4o(messages=messages)
+    return response
+
+def classify_page_type(img):
+    """Classify PPT page into types (1=title, 2=knowledge, 3=interactive) based on image content only"""
+    messages = [
+        dict(role="user", content=[
+            dict(type="image_url", image_url=dict(url=img)),
+            "Based on this PPT slide, classify it into one of three types and respond with ONLY the number:\n"
+            "1 - Title/connecting page (large text, section headings, minimal content)\n"
+            "2 - Knowledge page (detailed information, diagrams, bullet points)\n" 
+            "3 - Interactive page (discussion questions, exercises, practice problems)\n\n"
+            "Respond with just the number 1, 2, or 3."
+        ])
+    ]
+    
+    response, _, _ = GPT_Interface.call_gpt4o(messages=messages)
+
+    print(response)
+    
+    # Extract just the number from response
+    for char in response:
+        if char in ['1','2','3']:
+            return int(char)
+    
+    # Default to knowledge page if classification fails
+    return 2
+
+def classify_pages(imgs):
+    """Classify all pages in a presentation, returning list of integers 1-3"""
+    classifications = []
+    for img in tqdm(imgs):
+        page_type = classify_page_type(img)
+        classifications.append(page_type)
+    return classifications
+
