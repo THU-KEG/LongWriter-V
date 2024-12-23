@@ -1,7 +1,7 @@
 from inference.api import GPT_Interface
 from utils import encode_images_to_base64
 from PIL import Image
-from .eval import eval_metrics
+from lecgen.eval import eval_metrics
 from pymongo import MongoClient
 import os
 from tqdm import tqdm
@@ -208,6 +208,43 @@ def classify_page_type(img):
     
     # Default to knowledge page if classification fails
     return 2
+
+def generate_script_by_type(img, page_type, prev_script=""):
+    """Generate appropriate script based on page type classification"""
+    
+    # Different prompts optimized for each page type
+    prompts = {
+        1: """This appears to be a title or transition slide. Generate a brief, engaging introduction or transition that:
+        - Previews the upcoming content or summarizes previous content
+        - Uses a conversational, welcoming tone
+        - Keeps the explanation concise (2-3 sentences)
+        Respond with just the script text.""",
+        
+        2: """This is a knowledge-focused slide. Generate a detailed explanation that:
+        - Thoroughly explains all key concepts shown
+        - Uses clear examples and analogies where helpful
+        - Maintains an educational but engaging tone
+        - Connects ideas to previous content where relevant
+        Respond with just the script text.""",
+        
+        3: """This is an interactive slide. Generate a script that:
+        - Poses thought-provoking questions to the audience
+        - Encourages participation and discussion
+        - Provides space for student responses
+        - Guides students through exercises or problems
+        Respond with just the script text."""
+    }
+
+    messages = [
+        dict(role="user", content=[
+            dict(type="text", text=f"Previous script context:\n{prev_script}\n\n{prompts[page_type]}"),
+            dict(type="image_url", image_url=dict(url=img))
+        ])
+    ]
+    
+    script, _, _ = GPT_Interface.call_gpt4o(messages=messages)
+    return script
+
 
 def classify_pages(imgs):
     """Classify all pages in a presentation, returning list of integers 1-3"""

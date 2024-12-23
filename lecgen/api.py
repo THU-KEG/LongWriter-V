@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import List
-from .lecgen import polish
+from lecgen.generator import polish
 
 app = FastAPI()
 

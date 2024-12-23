@@ -1,4 +1,4 @@
-from lecgen.lecgen import GPT_Interface
+from lecgen.generator import GPT_Interface
 from tqdm import tqdm
 import os
 

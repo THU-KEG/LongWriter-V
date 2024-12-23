@@ -6,7 +6,17 @@ import requests
 import base64
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple
-import httpx
+import pdf2image
+from pptx import Presentation
+from io import BytesIO
+import tempfile
+import shutil
+from agentwrite.outline_vlm import lecgen_outline 
+from lecgen.generator import generate_script_by_type
+from lecgen.generator import polish
+import subprocess
+import fitz  # Add PyMuPDF import
+from utils import convert_pdf_to_png, pptx_to_pdf, encode_images_to_base64
 
 @dataclass
 class ScriptContent:
@@ -18,7 +28,7 @@ class ScriptContent:
 
 class ScriptViewer:
     def __init__(self):
-        self.title = "PPT Slides and Scripts Viewer"
+        self.title = "Lecture Script Generator"
         self.init_session_state()
         
     def init_session_state(self):
@@ -29,6 +39,80 @@ class ScriptViewer:
             st.session_state.current_images = []
         if 'modified_scripts' not in st.session_state:
             st.session_state.modified_scripts = set()
+        if 'temp_dir' not in st.session_state:
+            st.session_state.temp_dir = None
+        if 'generation_method' not in st.session_state:
+            st.session_state.generation_method = 'outline'
+        if 'image_dir' not in st.session_state:
+            st.session_state.image_dir = None
+        if 'temp_base_dir' not in st.session_state:
+            st.session_state.temp_base_dir = Path(tempfile.mkdtemp())
+
+    def process_uploaded_file(self, uploaded_file) -> List[str]:
+        """Process uploaded PPTX/PDF and return list of base64 encoded images"""
+        try:
+            # Create unique temp directory for this file
+            basename = Path(uploaded_file.name).stem
+            temp_dir = st.session_state.temp_base_dir / basename
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save uploaded file
+            input_path = temp_dir / uploaded_file.name
+            with open(input_path, 'wb') as f:
+                f.write(uploaded_file.getvalue())
+
+            base64_images = []
+            output_dir = temp_dir / 'images'
+            output_dir.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
+            
+            if uploaded_file.name.endswith('.pdf'):
+                # Use pdf2png utility function
+                convert_pdf_to_png(str(input_path), str(output_dir))
+            
+            elif uploaded_file.name.endswith('.pptx'):
+                # First convert PPTX to PDF
+                pdf_success = pptx_to_pdf(str(input_path), str(temp_dir))
+                if not pdf_success:
+                    raise Exception("Failed to convert PPTX to PDF")
+                
+                # Then convert PDF to PNG
+                pdf_path = temp_dir / f"{basename}.pdf"
+                convert_pdf_to_png(str(pdf_path), str(output_dir))
+            
+            # Store temp_dir in session state for later use
+            st.session_state.temp_dir = str(output_dir)
+            
+            # Encode all generated PNGs to base64
+            base64_images = encode_images_to_base64(str(output_dir))
+           
+            return base64_images
+            
+        except Exception as e:
+            st.error(f"Error processing file: {str(e)}")
+            return []
+
+    def generate_scripts(self, images: List[str], method: str) -> List[str]:
+        """Generate scripts based on selected method"""
+        try:
+            if not images:
+                raise ValueError("No images provided")
+            
+            if method == 'outline':
+                return lecgen_outline(images, st.session_state.temp_dir)
+            elif method == 'type_based':
+                scripts = []
+                prev_script = ""
+                for img_base64 in images:
+                    # You might want to implement page type detection here
+                    page_type = 2  # Default to knowledge-focused
+                    script = generate_script_by_type(img_base64, page_type, prev_script)
+                    scripts.append(script)
+                    prev_script = script
+                return scripts
+        except Exception as e:
+            st.error(f"Error generating scripts: {str(e)}")
+            return []
+        return []
 
     def load_images(self, image_directory: Path) -> List[Path]:
         """Load and sort image files from directory"""
@@ -71,46 +155,14 @@ class ScriptViewer:
             st.error(f"Error processing script directory: {str(e)}")
             return []
 
-    async def polish_script(self, images: List[Path], previous_scripts: List[str]) -> Optional[str]:
-        """Call API to polish script with improved error handling"""
+    def polish_script(self, images: List[Path], previous_scripts: List[str]) -> Optional[str]:
+        """Polish script using local polish function"""
         try:
-            encoded_imgs = [self._encode_image(img) for img in images]
-            
-            async with httpx.AsyncClient() as client:
-                try:
-                    response = await client.post(
-                        "http://0.0.0.0:8000/polish",
-                        json={
-                            "imgs": encoded_imgs,
-                            "scripts": previous_scripts
-                        },
-                        timeout=120.0
-                    )
-                    
-                    if response.status_code == 422:
-                        error_detail = response.json().get('detail', 'Unknown validation error')
-                        st.error(f"API Validation Error: {error_detail}")
-                        return None
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        if result.get("success"):
-                            return result["script"]
-                        st.error(f"API returned error: {result.get('error', 'Unknown error')}")
-                    else:
-                        st.error(f"API call failed with status code {response.status_code}: {response.text}")
-                except httpx.TimeoutException:
-                    st.error("API request timed out. Please try again.")
-                except httpx.RequestError as e:
-                    st.error(f"API request failed: {str(e)}")
+            return polish(images, previous_scripts)
         except Exception as e:
             st.error(f"Error during polish: {str(e)}")
-        return None
+            return None
 
-    @staticmethod
-    def _encode_image(image_path: Path) -> str:
-        """Encode image to base64"""
-        return base64.b64encode(image_path.read_bytes()).decode('utf-8')
 
     def save_scripts(self, script_directory: Path):
         """Save modified scripts back to files"""
@@ -161,13 +213,11 @@ class ScriptViewer:
 
     def handle_polish_request(self, key: str):
         """Handle polish button click for a specific script"""
-        import asyncio
-        
         # Get current image and script indices from the key
         i, j = map(int, key.split('_')[1:])
         
-        # Get relevant images (current and previous)
-        image_path = Path(st.session_state.image_dir)
+        # Get relevant images (current and up to 10 previous images)
+        image_path = Path(st.session_state.temp_dir)
         images = self.load_images(image_path)
         context_images = images[max(0, i-10):i+1]  # Current and up to 10 previous images
         
@@ -178,12 +228,12 @@ class ScriptViewer:
             if script_key in st.session_state.scripts:
                 previous_scripts.append(st.session_state.scripts[script_key])
         
-        # Call polish API
+        # Call polish function directly
         with st.spinner("Polishing script..."):
-            result = asyncio.run(self.polish_script(
+            result = self.polish_script(
                 images=context_images,
                 previous_scripts=previous_scripts
-            ))
+            )
             
             if result:
                 st.session_state.scripts[key] = result
@@ -211,75 +261,65 @@ class ScriptViewer:
         """Render sidebar controls"""
         st.sidebar.header("Configuration")
         
-        image_dir = st.sidebar.text_input(
-            "Image Directory:",
-            help="Directory containing numbered PNG files"
+        uploaded_file = st.sidebar.file_uploader(
+            "Upload PPTX/PDF file",
+            type=['pptx', 'pdf']
         )
         
-        num_script_dirs = st.sidebar.number_input(
-            "Number of Script Columns:",
-            min_value=1,
-            max_value=5,
-            value=1
-        )
-        
-        # Check if script directories have changed
-        old_script_dirs = getattr(st.session_state, 'script_dirs', [])
-        script_dirs = [
-            st.sidebar.text_input(f"Script Directory {i+1}:")
-            for i in range(num_script_dirs)
-        ]
-        
-        # If script directories changed, clear the scripts state
-        if old_script_dirs != script_dirs:
-            st.session_state.scripts = {}
-            st.session_state.modified_scripts = set()
-        
-        # Store in session state
-        st.session_state.image_dir = image_dir
-        st.session_state.script_dirs = script_dirs
+        if uploaded_file:
+            st.session_state.current_images = self.process_uploaded_file(uploaded_file)
+            
+            st.sidebar.selectbox(
+                "Script Generation Method",
+                options=['outline', 'type_based'],
+                key='generation_method'
+            )
+            
+            if st.sidebar.button("Generate Scripts"):
+                scripts = self.generate_scripts(
+                    st.session_state.current_images,
+                    st.session_state.generation_method
+                )
+                # Store generated scripts
+                for i, script in enumerate(scripts):
+                    st.session_state.scripts[f"script_{i}_0"] = script
+                st.rerun()
 
     def validate_inputs(self) -> bool:
         """Validate input directories"""
-        if not st.session_state.image_dir:
-            st.warning("Please enter an image directory path.")
-            return False
-            
-        image_path = Path(st.session_state.image_dir)
-        if not image_path.is_dir():
-            st.error("Invalid image directory path.")
-            return False
-            
         return True
 
     def render_content(self):
         """Render main content area"""
-        image_path = Path(st.session_state.image_dir)
-        script_paths = [Path(d) for d in st.session_state.script_dirs if d]
-        
-        images = self.load_images(image_path)
-        script_collections = [
-            self.load_scripts(path) for path in script_paths
-        ]
-        
-        if not images:
-            st.warning("No PNG files found in the specified directory.")
+        if not st.session_state.current_images:
+            st.info("Please upload a PPTX or PDF file to begin.")
             return
             
-        for i, image_file in enumerate(images):
-            # Add index display (i + 1 for 1-based indexing)
+        for i, img_base64 in enumerate(st.session_state.current_images):
             st.markdown(f"**#{i + 1}**")
             
-            cols = st.columns([1] + [2] * len(script_paths))
+            cols = st.columns([1, 2])
             
             with cols[0]:
-                st.image(str(image_file), use_container_width=True)
+                try:
+                    # Extract the actual base64 data from the data URL
+                    if ';base64,' in img_base64:
+                        img_base64 = img_base64.split(';base64,')[1]
+                    
+                    image_bytes = base64.b64decode(img_base64)
+                    image = Image.open(BytesIO(image_bytes))
+                    st.image(image, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error displaying image {i+1}: {str(e)}")
+                    continue  # Skip to next image if there's an error
             
-            for j, scripts in enumerate(script_collections):
-                with cols[j + 1]:
-                    script = (scripts[i] if i < len(scripts)
-                            else ScriptContent("", is_empty=True))
-                    self.render_script_editor(script, f"script_{i}_{j}")
+            with cols[1]:
+                script_key = f"script_{i}_0"
+                script = ScriptContent(
+                    st.session_state.scripts.get(script_key, ""),
+                    is_empty=True
+                )
+                self.render_script_editor(script, script_key)
 
 def main():
     viewer = ScriptViewer()

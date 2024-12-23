@@ -134,3 +134,51 @@ def pdf_to_pngs(pdf_path: str, output_dir: str):
         print(f"Error processing {pdf_path}: {str(e)}")
         return False
     return True
+
+def convert_pdf_to_png(input_file, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Open the PDF file
+    doc = fitz.open(input_file)
+
+    # Iterate through each page of the PDF
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)  # Load the current page
+        pix = page.get_pixmap()  # Render page to an image
+        output_path = os.path.join(output_dir, f'{page_num + 1}.png')  # Define output path for the image
+        pix.save(output_path)  # Save the image
+
+    print(f"Conversion completed. Images are saved in '{output_dir}'.")
+
+def pptx_to_pdf(input_file: str, output_dir: str) -> bool:
+    """Convert a PPTX file to PDF using LibreOffice in Docker.
+    
+    Args:
+        input_file: Path to the PPTX file
+        output_dir: Directory to save the PDF file
+        
+    Returns:
+        bool: True if conversion successful, False otherwise
+    """
+    try:
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Convert paths to absolute paths
+        input_file = os.path.abspath(input_file)
+        input_dir = os.path.dirname(input_file)
+        
+        # Run LibreOffice conversion in Docker
+        cmd = f'docker run --rm -v "{input_dir}:/data" libreoffice-converter libreoffice --headless --convert-to pdf --outdir /data "{os.path.basename(input_file)}"'
+        
+        # Execute command and check return code
+        result = os.system(cmd)
+        if result != 0:
+            print(f"Error converting {input_file} to PDF")
+            return False
+            
+        return True
+        
+    except Exception as e:
+        print(f"Error during PPTX to PDF conversion: {str(e)}")
+        return False

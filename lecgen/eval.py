@@ -161,7 +161,7 @@ if __name__ == '__main__':
     old_script_root = Path(__file__).parent.parent / 'data/bio2/scripts'
     script_root = Path(__file__).parent.parent / 'data/bio2/results_3'
 
-    from lecgen.lecgen import get_scripts, encode_images_to_pil
+    from lecgen.generator import get_scripts, encode_images_to_pil
     ground_truth_scripts = get_scripts(ground_truth_root)
     results_3_scripts = get_scripts(script_root)
     old_scripts = get_scripts(old_script_root)
