@@ -97,7 +97,7 @@ Please output only the script content, with no additional text or formatting.
             dict(
                 role="user",
                 content=[
-                    dict(type="image_url", image_url=dict(url=f"data:image/png;base64,{img}"))
+                    dict(type="image_url", image_url=dict(url=img))
                 ]
             ),
             dict(
@@ -112,7 +112,7 @@ Please output only the script content, with no additional text or formatting.
             role="user",
             content=[
                 dict(type="text", text=prompt),
-                dict(type="image_url", image_url=dict(url=f"data:image/png;base64,{imgs[-1]}"))
+                dict(type="image_url", image_url=dict(url=imgs[-1]))
             ]
         )
     )

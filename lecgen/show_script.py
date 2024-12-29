@@ -16,7 +16,7 @@ from lecgen.generator import generate_script_by_type
 from lecgen.generator import polish
 import subprocess
 import fitz  # Add PyMuPDF import
-from utils import convert_pdf_to_png, pptx_to_pdf, encode_images_to_base64
+from utils import convert_pdf_to_png, pptx_to_pdf, encode_image_to_base64
 
 @dataclass
 class ScriptContent:
@@ -47,6 +47,8 @@ class ScriptViewer:
             st.session_state.image_dir = None
         if 'temp_base_dir' not in st.session_state:
             st.session_state.temp_base_dir = Path(tempfile.mkdtemp())
+        if 'processed_files' not in st.session_state:
+            st.session_state.processed_files = set()
 
     def process_uploaded_file(self, uploaded_file) -> List[str]:
         """Process uploaded PPTX/PDF and return list of base64 encoded images"""
@@ -82,8 +84,8 @@ class ScriptViewer:
             # Store temp_dir in session state for later use
             st.session_state.temp_dir = str(output_dir)
             
-            # Encode all generated PNGs to base64
-            base64_images = encode_images_to_base64(str(output_dir))
+            image_files = self.load_images(output_dir)
+            base64_images = [encode_image_to_base64(str(f)) for f in image_files]
            
             return base64_images
             
@@ -98,7 +100,7 @@ class ScriptViewer:
                 raise ValueError("No images provided")
             
             if method == 'outline':
-                return lecgen_outline(images, st.session_state.temp_dir)
+                return lecgen_outline(images, st.session_state.temp_dir)[0]
             elif method == 'type_based':
                 scripts = []
                 prev_script = ""
@@ -231,7 +233,7 @@ class ScriptViewer:
         # Call polish function directly
         with st.spinner("Polishing script..."):
             result = self.polish_script(
-                images=context_images,
+                images=[encode_image_to_base64(str(f)) for f in context_images],
                 previous_scripts=previous_scripts
             )
             
@@ -267,7 +269,11 @@ class ScriptViewer:
         )
         
         if uploaded_file:
-            st.session_state.current_images = self.process_uploaded_file(uploaded_file)
+            # Only process the file if it hasn't been processed before
+            file_identifier = f"{uploaded_file.name}_{uploaded_file.size}"
+            if file_identifier not in st.session_state.processed_files:
+                st.session_state.current_images = self.process_uploaded_file(uploaded_file)
+                st.session_state.processed_files.add(file_identifier)
             
             st.sidebar.selectbox(
                 "Script Generation Method",

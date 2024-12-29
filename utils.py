@@ -98,6 +98,8 @@ def encode_image_to_base64(img_path):
 
 def encode_images_to_base64(img_dir):
     image_files = os.listdir(img_dir)
+    # Filter for files that match the pattern of "1.png", "2.png", etc.
+    image_files = [f for f in image_files if re.match(r'^\d+\.png$', f)]
     image_files = sorted(image_files, key=lambda x: int(x.split("/")[-1].split('.')[0]))
     image_urls = []
     

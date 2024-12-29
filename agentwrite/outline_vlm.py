@@ -81,6 +81,9 @@ Outline for this slide:
         prompt_gen_formatted = prompt_gen.format(outline=outlines[str(i+1)]["outline"], target_words=outlines[str(i+1)]["target_words"])
         messages = [dict(role="user", content=[dict(type="text", text=prompt_gen_formatted)] + [dict(type="image_url", image_url=dict(url=img)) for img in imgs])] 
         response, it, ot = GPT_Interface.call_gpt4o(messages=history + messages)
+        
+        print(response)
+
         input_tokens += it
         output_tokens += ot
         messages.append(dict(role="assistant", content=response))
