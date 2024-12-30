@@ -69,6 +69,8 @@ class GPT_Interface:
                     
                 response = cls.client.chat.completions.create(**params)
 
+                print(response)
+
                 result = (response.choices[0].message.content, 
                          response.usage.prompt_tokens,
                          response.usage.completion_tokens)
@@ -79,7 +81,7 @@ class GPT_Interface:
                 
             except Exception as e:
                 if attempt < retries - 1:
-                    print(f"Attempt {attempt + 1} failed, retrying in {delay} seconds...")
+                    print(f"Attempt {attempt + 1} failed, caused by {str(e)}, retrying in {delay} seconds...")
                     time.sleep(delay)
                 else:
                     raise Exception(f"{model} API call failed after {retries} attempts: {str(e)}")
@@ -89,7 +91,7 @@ class GPT_Interface:
                    temperature: float = 0.7,
                    max_tokens: Optional[int] = None,
                    use_cache: bool = True) -> tuple[str, int, int]:
-        return cls._call_gpt("gpt-4o-2024-08-06", messages, temperature, max_tokens, use_cache=use_cache)
+        return cls._call_gpt("gpt-4o", messages, temperature, max_tokens, use_cache=use_cache)
     
     @classmethod        
     def call_gpt4v(cls, messages: List[Dict[str, Any]],
