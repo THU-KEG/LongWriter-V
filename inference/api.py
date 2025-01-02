@@ -91,6 +91,13 @@ class GPT_Interface:
                    use_cache: bool = True) -> tuple[str, int, int]:
         return cls._call_gpt("gpt-4o-2024-08-06", messages, temperature, max_tokens, use_cache=use_cache)
     
+    @classmethod
+    def call_gpt4o_mini(cls, messages: List[Dict[str, str]], 
+                        temperature: float = 0.7,
+                        max_tokens: Optional[int] = None,
+                        use_cache: bool = True) -> tuple[str, int, int]:
+        return cls._call_gpt("gpt-4o-mini", messages, temperature, max_tokens, use_cache=use_cache)
+    
     @classmethod        
     def call_gpt4v(cls, messages: List[Dict[str, Any]],
                    temperature: float = 0.7,
