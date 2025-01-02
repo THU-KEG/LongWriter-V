@@ -16,7 +16,7 @@ from lecgen.generator import generate_script_by_type
 from lecgen.generator import polish
 import subprocess
 import fitz  # Add PyMuPDF import
-from utils import convert_pdf_to_png, pptx_to_pdf, encode_images_to_base64
+from utils import convert_pdf_to_png, pptx_to_pdf, encode_image_to_base64
 
 @dataclass
 class ScriptContent:
@@ -47,6 +47,15 @@ class ScriptViewer:
             st.session_state.image_dir = None
         if 'temp_base_dir' not in st.session_state:
             st.session_state.temp_base_dir = Path(tempfile.mkdtemp())
+        if 'processed_files' not in st.session_state:
+            st.session_state.processed_files = set()
+        if 'should_generate' not in st.session_state:
+            st.session_state.should_generate = False
+        # New state variables for polish preview
+        if 'polish_preview' not in st.session_state:
+            st.session_state.polish_preview = {}  # key -> polished content
+        if 'pending_polish' not in st.session_state:
+            st.session_state.pending_polish = set()  # keys with pending polish previews
 
     def process_uploaded_file(self, uploaded_file) -> List[str]:
         """Process uploaded PPTX/PDF and return list of base64 encoded images"""
@@ -82,9 +91,23 @@ class ScriptViewer:
             # Store temp_dir in session state for later use
             st.session_state.temp_dir = str(output_dir)
             
-            # Encode all generated PNGs to base64
-            base64_images = encode_images_to_base64(str(output_dir))
-           
+            # Scale and save images
+            image_files = self.load_images(output_dir)
+            base64_images = []
+            for img_path in image_files:
+                # Open and scale image
+                with Image.open(img_path) as img:
+                    # Scale down if width is greater than 1024 pixels
+                    if img.width > 1024:
+                        ratio = 1024 / img.width
+                        new_size = (1024, int(img.height * ratio))
+                        img = img.resize(new_size, Image.Resampling.LANCZOS)
+                        # Save scaled image back to the same path
+                        img.save(img_path, format="PNG")
+                
+                # Encode the saved image
+                base64_images.append(encode_image_to_base64(str(img_path)))
+            
             return base64_images
             
         except Exception as e:
@@ -92,27 +115,59 @@ class ScriptViewer:
             return []
 
     def generate_scripts(self, images: List[str], method: str) -> List[str]:
-        """Generate scripts based on selected method"""
         try:
             if not images:
                 raise ValueError("No images provided")
             
+            total_images = len(images)
+            
             if method == 'outline':
-                return lecgen_outline(images, st.session_state.temp_dir)
+                scripts = lecgen_outline(images, st.session_state.temp_dir)[0]
+               
+                # Update session state with generated scripts
+                for i, script in enumerate(scripts):
+                    script_key = f"script_{i}_0"
+                    st.session_state.scripts[script_key] = script
+                    st.session_state.modified_scripts.add(script_key)
+                
+                return scripts
+                
             elif method == 'type_based':
                 scripts = []
                 prev_script = ""
-                for img_base64 in images:
-                    # You might want to implement page type detection here
+                
+                for idx, img_base64 in enumerate(images):
+                    status_text.text(f"Generating script for slide {idx + 1}/{total_images}")
+                    progress = (idx + 1) / total_images  # Convert to 0-1 range
+                    progress_bar.progress(progress)
+                    
                     page_type = 2  # Default to knowledge-focused
                     script = generate_script_by_type(img_base64, page_type, prev_script)
                     scripts.append(script)
                     prev_script = script
+                    
+                    # Update session state as each script is generated
+                    script_key = f"script_{idx}_0"
+                    st.session_state.scripts[script_key] = script
+                    st.session_state.modified_scripts.add(script_key)
+                
+                status_text.text("Script generation complete!")
+                progress_bar.empty()
+                status_text.empty()
                 return scripts
+            
+            return []  # Return empty list for unknown methods
+            
         except Exception as e:
             st.error(f"Error generating scripts: {str(e)}")
             return []
-        return []
+        finally:
+            # Clean up progress indicators if they still exist
+            try:
+                progress_bar.empty()
+                status_text.empty()
+            except:
+                pass
 
     def load_images(self, image_directory: Path) -> List[Path]:
         """Load and sort image files from directory"""
@@ -183,26 +238,65 @@ class ScriptViewer:
     def render_script_editor(self, script: ScriptContent, key: str,
                            can_polish: bool = True) -> None:
         """Render an individual script editor with polish button"""
-        # if script.file_name:
-        #     st.markdown(f"**{script.file_name}**")
-        
         # Use session state for script content
         if key not in st.session_state.scripts:
             st.session_state.scripts[key] = script.content
         
-        edited_content = st.text_area(
-            label=f"Script Content {key}",
-            value=st.session_state.scripts[key],
-            key=f"textarea_{key}",
-            height=400,
-            label_visibility="collapsed",
-            on_change=self.handle_script_change,
-            args=(key,)
-        )
-        
-        if can_polish:
-            if st.button("Polish", key=f"polish_{key}"):
-                self.handle_polish_request(key)
+        # If there's a pending polish preview for this key, show it with accept/reject buttons
+        if key in st.session_state.pending_polish:
+            cols = st.columns([1, 1])
+            with cols[0]:
+                st.markdown("**Current Version:**")
+                st.text_area(
+                    label=f"Current Script {key}",
+                    value=st.session_state.scripts[key],
+                    key=f"current_{key}",
+                    height=200,
+                    disabled=True,
+                    label_visibility="collapsed"
+                )
+            with cols[1]:
+                st.markdown("**Polished Version (Preview):**")
+                st.text_area(
+                    label=f"Polished Script {key}",
+                    value=st.session_state.polish_preview[key],
+                    key=f"preview_{key}",
+                    height=200,
+                    disabled=True,
+                    label_visibility="collapsed"
+                )
+            
+            # Add accept/reject buttons
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Accept Polish", key=f"accept_{key}"):
+                    st.session_state.scripts[key] = st.session_state.polish_preview[key]
+                    st.session_state.modified_scripts.add(key)
+                    # Clean up preview state
+                    del st.session_state.polish_preview[key]
+                    st.session_state.pending_polish.remove(key)
+                    st.rerun()
+            with col2:
+                if st.button("Reject Polish", key=f"reject_{key}"):
+                    # Clean up preview state
+                    del st.session_state.polish_preview[key]
+                    st.session_state.pending_polish.remove(key)
+                    st.rerun()
+        else:
+            # Show normal editor when no preview is pending
+            edited_content = st.text_area(
+                label=f"Script Content {key}",
+                value=st.session_state.scripts[key],
+                key=f"textarea_{key}",
+                height=400,
+                label_visibility="collapsed",
+                on_change=self.handle_script_change,
+                args=(key,)
+            )
+            
+            if can_polish:
+                if st.button("Polish", key=f"polish_{key}"):
+                    self.handle_polish_request(key)
 
     def handle_script_change(self, key: str):
         """Handle script content changes"""
@@ -231,13 +325,14 @@ class ScriptViewer:
         # Call polish function directly
         with st.spinner("Polishing script..."):
             result = self.polish_script(
-                images=context_images,
+                images=[encode_image_to_base64(str(f)) for f in context_images],
                 previous_scripts=previous_scripts
             )
             
             if result:
-                st.session_state.scripts[key] = result
-                st.session_state.modified_scripts.add(key)
+                # Store the polished result in preview state
+                st.session_state.polish_preview[key] = result
+                st.session_state.pending_polish.add(key)
                 st.rerun()
 
     def render(self):
@@ -249,6 +344,15 @@ class ScriptViewer:
         
         if not self.validate_inputs():
             return
+        
+        # Handle script generation if requested
+        if st.session_state.should_generate:
+            if st.session_state.current_images:
+                self.generate_scripts(
+                    st.session_state.current_images,
+                    st.session_state.generation_method
+                )
+            st.session_state.should_generate = False
         
         self.render_content()
         
@@ -267,7 +371,11 @@ class ScriptViewer:
         )
         
         if uploaded_file:
-            st.session_state.current_images = self.process_uploaded_file(uploaded_file)
+            # Only process the file if it hasn't been processed before
+            file_identifier = f"{uploaded_file.name}_{uploaded_file.size}"
+            if file_identifier not in st.session_state.processed_files:
+                st.session_state.current_images = self.process_uploaded_file(uploaded_file)
+                st.session_state.processed_files.add(file_identifier)
             
             st.sidebar.selectbox(
                 "Script Generation Method",
@@ -275,14 +383,8 @@ class ScriptViewer:
                 key='generation_method'
             )
             
-            if st.sidebar.button("Generate Scripts"):
-                scripts = self.generate_scripts(
-                    st.session_state.current_images,
-                    st.session_state.generation_method
-                )
-                # Store generated scripts
-                for i, script in enumerate(scripts):
-                    st.session_state.scripts[f"script_{i}_0"] = script
+            if st.sidebar.button("Generate Scripts", key="generate_button"):
+                st.session_state.should_generate = True
                 st.rerun()
 
     def validate_inputs(self) -> bool:
@@ -296,7 +398,7 @@ class ScriptViewer:
             return
             
         for i, img_base64 in enumerate(st.session_state.current_images):
-            st.markdown(f"**#{i + 1}**")
+            st.markdown(f"**Slide {i + 1}**")
             
             cols = st.columns([1, 2])
             
@@ -315,9 +417,10 @@ class ScriptViewer:
             
             with cols[1]:
                 script_key = f"script_{i}_0"
+                script_content = st.session_state.scripts.get(script_key, "")
                 script = ScriptContent(
-                    st.session_state.scripts.get(script_key, ""),
-                    is_empty=True
+                    content=script_content,
+                    is_empty=(not script_content)
                 )
                 self.render_script_editor(script, script_key)
 

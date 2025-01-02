@@ -7,6 +7,9 @@ config.json
 outputs/*
 environments
 logs
+.streamlit
+nohup.out
 data
 ppt2png
 tmp
+*.tar
