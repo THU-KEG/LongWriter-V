@@ -8,6 +8,7 @@ import re
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from rouge_score import rouge_scorer
 from typing import List, Dict
+from multiprocessing import Pool, cpu_count
 from PIL import Image
 
 def encode_images_to_pil(img_dir):
@@ -55,22 +56,45 @@ def cal_text_metrics(reference: str, hypothesis: str) -> Dict[str, float]:
     }
 
 def extract_json(text: str) -> Dict:
-    # Try to extract JSON from markdown code blocks first
-    import re
-    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    """
+    Extract and parse JSON from text using GPT to fix any formatting issues.
     
-    if json_match:
-        # Found JSON in code blocks, parse the contents
-        json_str = json_match.group(1)
-    else:
-        # No code blocks found, treat entire text as JSON
-        json_str = text
+    Args:
+        text: Input text that may contain JSON
         
+    Returns:
+        Parsed JSON as a dictionary
+        
+    Raises:
+        ValueError: If JSON cannot be parsed
+    """
+    # Remove any markdown code block syntax first
+    text = re.sub(r'```(?:json)?\s*(.*?)\s*```', r'\1', text, flags=re.DOTALL)
+    
+    # Try direct parsing first
     try:
-        # Parse the JSON string
-        return json.loads(json_str)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Failed to parse JSON: {str(e)}")
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Use GPT to fix the JSON
+        from inference.api import GPT_Interface
+        try:
+            prompt = [
+                {
+                    "role": "system",
+                    "content": "You are a JSON repair expert. Fix the provided JSON by properly escaping strings and fixing any formatting issues. Return only the fixed JSON with no other text."
+                },
+                {
+                    "role": "user", 
+                    "content": f"Fix this malformed JSON:\n{text}"
+                }
+            ]
+            from datetime import datetime
+            print(f"calling gpt4o_mini to fix json at {datetime.now()}", prompt[0]['content'])
+            fixed_json, _, _ = GPT_Interface.call_gpt4o_mini(prompt, temperature=0)
+            print(f"gpt4o_mini response at {datetime.now()}", fixed_json)
+            return json.loads(fixed_json)
+        except Exception as e:
+            raise ValueError(f"Failed to parse JSON: {str(e)}")
 
 def count_words(text):
     chinese_characters = re.findall(r'[\u4e00-\u9fff]', text)
@@ -122,32 +146,6 @@ def encode_images_to_base64(img_dir):
     
     return image_urls
 
-def pdf_to_pngs(pdf_path: str, output_dir: str):
-    """Convert a PDF file to PNG images.
-    
-    Args:
-        pdf_path: Path to the PDF file
-        output_dir: Directory to save the PNG images
-    """
-    # Create subdirectory based on PDF filename
-    pdf_name = Path(pdf_path).stem
-    pdf_output_dir = os.path.join(output_dir, pdf_name)
-    os.makedirs(pdf_output_dir, exist_ok=True)
-    
-    try:
-        doc = fitz.open(pdf_path)
-        for page_num in tqdm(range(len(doc)), desc=f"Converting {Path(pdf_path).name}"):
-            page = doc.load_page(page_num)
-            pix = page.get_pixmap()
-            # Save to the PDF-specific subdirectory
-            output_path = os.path.join(pdf_output_dir, f"{page_num + 1}.png")
-            pix.save(output_path)
-        doc.close()
-    except Exception as e:
-        print(f"Error processing {pdf_path}: {str(e)}")
-        return False
-    return True
-
 def convert_pdf_to_png(input_file, output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
@@ -195,3 +193,48 @@ def pptx_to_pdf(input_file: str, output_dir: str) -> bool:
     except Exception as e:
         print(f"Error during PPTX to PDF conversion: {str(e)}")
         return False
+
+def _parallel_wrapper(args):
+    """
+    Wrapper function for parallel processing that unpacks arguments.
+    
+    Args:
+        args: Tuple of (func, args, kwargs) where:
+            - func: The function to execute
+            - args: List or tuple of positional arguments
+            - kwargs: Dictionary of keyword arguments
+    """
+    func, args, kwargs = args[0], args[1], args[2] if len(args) > 2 else {}
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        print(f"Error processing with args {args}: {str(e)}")
+        return None
+
+def parallel_process(func, args_list, num_processes=None, **kwargs):
+    """
+    Run a function across multiple processes for parallel processing.
+    
+    Args:
+        func: The function to run in parallel
+        args_list: List of argument tuples/lists, each containing the arguments for one function call
+        num_processes: Number of processes to use (defaults to CPU count)
+        **kwargs: Additional keyword arguments to pass to each function call
+        
+    Returns:
+        List of results from the function calls
+    """
+    if num_processes is None:
+        num_processes = cpu_count()
+    
+    # Prepare arguments for each item
+    process_args = [(func, args, kwargs) for args in args_list]
+    
+    with Pool(processes=num_processes) as pool:
+        results = list(tqdm(
+            pool.imap(_parallel_wrapper, process_args),
+            total=len(args_list),
+            desc=f"Processing {len(args_list)} items with {num_processes} processes"
+        ))
+    
+    return results
