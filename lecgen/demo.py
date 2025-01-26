@@ -1,21 +1,27 @@
 import streamlit as st
-import os
+
+# Set page config to wide mode
+st.set_page_config(
+    page_title="讲稿生成",
+    layout="wide"
+)
+
+import sys
 from pathlib import Path
+
+# Add the project root to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from lecgen.optimizer.polish import polish
 from PIL import Image
-import requests
 import base64
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Tuple
-import pdf2image
-from pptx import Presentation
+from typing import List, Optional
 from io import BytesIO
 import tempfile
-import shutil
-from agentwrite.outline_vlm import lecgen_outline 
-from lecgen.generator import generate_script_by_type
-from lecgen.generator import polish
-import subprocess
-import fitz  # Add PyMuPDF import
+from lecgen.generator.outline import lecgen_outline 
 from utils import convert_pdf_to_png, pptx_to_pdf, encode_image_to_base64
 
 @dataclass

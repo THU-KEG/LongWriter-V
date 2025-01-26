@@ -13,3 +13,4 @@ data
 ppt2png
 tmp
 *.tar
+*.db

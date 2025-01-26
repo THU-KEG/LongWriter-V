@@ -8,6 +8,17 @@ import re
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from rouge_score import rouge_scorer
 from typing import List, Dict
+from PIL import Image
+
+def encode_images_to_pil(img_dir):
+    image_files = os.listdir(img_dir)
+    image_files = sorted(image_files, key=lambda x: int(x.split("/")[-1].split('.')[0]))
+    images = []
+    
+    for filename in image_files:
+        images.append(Image.open(os.path.join(img_dir, filename)).convert("RGB"))
+    
+    return images
 
 def cal_text_metrics(reference: str, hypothesis: str) -> Dict[str, float]:
     """

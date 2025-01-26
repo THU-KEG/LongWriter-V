@@ -1,6 +1,5 @@
 from utils import cal_text_metrics
 import os
-from pathlib import Path
 from PIL import Image
 from typing import List, Dict
 import matplotlib.pyplot as plt
@@ -156,21 +155,4 @@ def eval_reranker(references: List[str], hypotheses: List[str], output_path: str
 
 
 if __name__ == '__main__':
-    img_root = Path(__file__).parent.parent / 'data/bio2/pngs'
-    ground_truth_root = Path(__file__).parent.parent / 'data/bio2/scripts_online'
-    old_script_root = Path(__file__).parent.parent / 'data/bio2/scripts'
-    script_root = Path(__file__).parent.parent / 'data/bio2/results_3'
-
-    from lecgen.generator import get_scripts, encode_images_to_pil
-    ground_truth_scripts = get_scripts(ground_truth_root)
-    results_3_scripts = get_scripts(script_root)
-    old_scripts = get_scripts(old_script_root)
-    imgs = encode_images_to_pil(img_root)
-    metrics_score = eval_metrics(ground_truth_scripts, results_3_scripts, output_path='outputs/eval/metrics/results_3')
-    metrics_score = eval_metrics(ground_truth_scripts, old_scripts, output_path='outputs/eval/metrics/old')
-    rm_score = eval_rm(imgs, results_3_scripts, output_path='outputs/eval/rm/results_3')
-    rm_score = eval_rm(imgs, old_scripts, output_path='outputs/eval/rm/old')
-    rm_score = eval_rm(imgs, ground_truth_scripts, output_path='outputs/eval/rm/ground_truth')
-    reranker_score = eval_reranker(ground_truth_scripts, old_scripts, output_path='outputs/eval/reranker/old')
-    reranker_score = eval_reranker(ground_truth_scripts, results_3_scripts, output_path='outputs/eval/reranker/results_3')
-    print(reranker_score)
+    pass
