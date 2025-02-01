@@ -60,7 +60,7 @@ Output only the new section with no other text."""
         ]
     )]
 
-    plan, input_tokens, output_tokens = GPT_Interface.call_gpt4o(messages=messages)
+    plan = GPT_Interface.call(model="gpt-4o", messages=messages)
 
     # Updated section extraction using regex to keep "Section X" prefix
     section_pattern = r'(Section \d+[^:]*:.*?)(?=Section \d+|$)'
@@ -101,9 +101,7 @@ Output only the new section with no other text."""
             ]
         )]
         
-        response, it, ot = GPT_Interface.call_gpt4o(messages=messages)
-        input_tokens += it
-        output_tokens += ot
+        response = GPT_Interface.call(model="gpt-4o", messages=messages)
         
         word_count = len(response.split())  # Count words in response
         

@@ -19,7 +19,7 @@ def lecgen_iter(imgs, output_dir):
                 dict(role="assistant", content=r)
             ])
         messages.append(dict(role="user", content=[dict(type="text", text=prompt)] + [dict(type="image_url", image_url=dict(url=f"data:image/png;base64,{img}")) for img in imgs[i:]]))
-        response = GPT_Interface.call_gpt4o(messages=messages)
+        response = GPT_Interface.call(model="gpt-4o", messages=messages)
         with open(f"{output_dir}/{i+1}.txt", "w") as f:
             f.write(response)
         print(response)

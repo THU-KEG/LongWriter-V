@@ -1,10 +1,7 @@
 import argparse
-import pandas as pd
 from eval.utils import BaseEvaluator, get_image_path, print_res, print_res_head
-from inference.api.gpt import GPT_Interface
+from inference.api.gpt import GPT_Interface, DeepSeek_Interface
 from utils import encode_image_to_base64
-from inference.local.glm import get_model as get_glm_model
-from inference.local.mistral import get_model as get_mistral_model
 
 class CaptionLLMEvaluator(BaseEvaluator):
     """Evaluator that uses captioning and LLM for prediction"""
@@ -57,7 +54,7 @@ Please provide a clear, structured description that captures both the visual and
         captions = []
         for p in image_path:
             messages = [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": encode_image_to_base64(p)}}]}]
-            caption, _, _ = GPT_Interface.call_gpt4o_0513(messages)
+            caption = GPT_Interface.call(model="gpt-4o", messages=messages)
             captions.append(caption)
         return captions
     
@@ -85,15 +82,17 @@ Please provide a comprehensive response that fully satisfies the writing require
         
         messages = [{"role": "user", "content": prompt}]        
         if self.model_type == 'gpt-4o':
-            res, _, _ = GPT_Interface.call_gpt4o_0513(messages, max_tokens=8192, use_cache=False)
+            res = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, use_cache=False, max_tokens=8192)
         elif self.model_type == 'deepseek-reasoner':
-            res, _, _ = GPT_Interface._call_gpt(model='deepseek-reasoner', messages=messages, max_tokens=8192, use_cache=False)
+            res = DeepSeek_Interface.call(model='deepseek-reasoner', messages=messages, use_cache=False, max_tokens=8192)
         elif self.model_type == 'glm-4-9b':
             if self.model is None:
+                from inference.local.glm import get_model as get_glm_model
                 self.model = get_glm_model('glm-4-9b')
             res = self.model.inference_vllm(messages)
         elif self.model_type == 'mistral-large-instruct-2407':
             if self.model is None:
+                from inference.local.mistral import get_model as get_mistral_model
                 self.model = get_mistral_model('large-instruct-2407')
             res = self.model.inference(messages)
         else:

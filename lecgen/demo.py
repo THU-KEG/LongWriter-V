@@ -128,7 +128,7 @@ class ScriptViewer:
             total_images = len(images)
             
             if method == 'outline':
-                scripts = lecgen_outline(images, st.session_state.temp_dir)[0]
+                scripts = lecgen_outline(images, st.session_state.temp_dir)
                
                 # Update session state with generated scripts
                 for i, script in enumerate(scripts):

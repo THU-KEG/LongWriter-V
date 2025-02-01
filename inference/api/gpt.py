@@ -6,6 +6,9 @@ from pymongo import MongoClient
 import time
 import hashlib
 
+config_path = "config.json"
+config = json.load(open(config_path))
+
 class MongoCache:
     """MongoDB-based cache implementation"""
     def __init__(self, host: str, port: int, db_name: str):
@@ -34,79 +37,56 @@ class MongoCache:
     def clear(self):
         self.collection.delete_many({})
 
+cache = MongoCache(
+    host=config["mongo_cache_host"],
+    port=config["mongo_cache_port"],
+    db_name=config["mongo_cache_db"]
+)
+
 class GPT_Interface:
-    """Interface for calling OpenAI GPT-4 models with response caching"""
-    
-    # Load config file
-    config_path = "config.json"
-    try:
-        with open(config_path) as f:
-            config = json.load(f)
-            client = OpenAI(
-                api_key=config["api_key"],
-                base_url=config.get("base_url")
-            )
-            # Initialize MongoDB cache
-            cache = MongoCache(
-                host=config["mongo_cache_host"],
-                port=config["mongo_cache_port"],
-                db_name=config["mongo_cache_db"]
-            )
-    except Exception as e:
-        raise Exception(f"Failed to load config or initialize cache: {str(e)}")
+    client = OpenAI(
+        api_key=config["openai_api_key"],
+        base_url=config.get("openai_base_url")
+    )
 
     @staticmethod
     def _generate_cache_key(model: str, messages: List[Dict[str, Any]], 
-                           temperature: float, max_tokens: Optional[int]) -> str:
+                           **kwargs) -> str:
         """Generate a stable, fixed-length cache key using SHA-256"""
-        # Create a more stable message representation
         simplified_messages = [
             {
                 'role': msg['role'],
                 'content': msg['content'] if isinstance(msg['content'], str) 
-                          else str(msg['content'])  # Handle non-string content
+                          else str(msg['content'])
             }
             for msg in messages
         ]
-        # Create a string combining all relevant parameters
-        key_content = f"{model}_{json.dumps(simplified_messages, sort_keys=True)}_{temperature}_{max_tokens}"
-        # Generate SHA-256 hash
+        key_content = f"{model}_{json.dumps(simplified_messages, sort_keys=True)}_{json.dumps(kwargs, sort_keys=True)}"
         return hashlib.sha256(key_content.encode()).hexdigest()
 
     @classmethod
-    def _call_gpt(cls, model: str, messages: List[Dict[str, Any]], 
-                  temperature: float = 0.7, max_tokens: Optional[int] = None,
-                  retries: int = 3, delay: float = 1.0, use_cache: bool = True) -> tuple[str, int, int]:
+    def call(cls, model, messages, use_cache=True, **kwargs):
         """
         Common helper method for GPT API calls with caching and retry logic
         Returns: Tuple of (response_content, prompt_tokens, completion_tokens)
         """
-        cache_key = cls._generate_cache_key(model, messages, temperature, max_tokens)
+        cache_key = cls._generate_cache_key(model, messages, **kwargs)
         
         if use_cache:
-            cached_result = cls.cache.get(cache_key)
+            cached_result = cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
+        retries = 3
+        delay = 1.0
         for attempt in range(retries):
             try:
-                params = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "timeout": 600.0
-                }
-                if max_tokens:
-                    params["max_tokens"] = max_tokens
-                    
-                response = cls.client.chat.completions.create(**params)
+                response = cls.client.chat.completions.create(model=model, messages=messages, **kwargs)
 
-                result = (response.choices[0].message.content, 
-                         response.usage.prompt_tokens,
-                         response.usage.completion_tokens)
+                result = response.choices[0].message.content
                 
                 if use_cache:
-                    cls.cache[cache_key] = result
+                    cache[cache_key] = result
                 return result
                 
             except Exception as e:
@@ -114,41 +94,24 @@ class GPT_Interface:
                     print(f"Attempt {attempt + 1} failed, caused by {str(e)}, retrying in {delay} seconds...")
                     time.sleep(delay)
                 else:
-                    raise Exception(f"{model} API call failed after {retries} attempts: {str(e)}")
-
-    @classmethod
-    def call_gpt4o(cls, messages: List[Dict[str, str]], 
-                   temperature: float = 0.7,
-                   max_tokens: Optional[int] = None,
-                   use_cache: bool = True) -> tuple[str, int, int]:
-        return cls._call_gpt("gpt-4o", messages, temperature, max_tokens, use_cache=use_cache)
-
-    @classmethod
-    def call_gpt4o_0513(cls, messages: List[Dict[str, str]], 
-                   temperature: float = 0.7,
-                   max_tokens: Optional[int] = None,
-                   use_cache: bool = True) -> tuple[str, int, int]:
-        return cls._call_gpt("gpt-4o-2024-05-13", messages, temperature, max_tokens, use_cache=use_cache)
-    
-    @classmethod
-    def call_gpt4o_mini(cls, messages: List[Dict[str, str]], 
-                        temperature: float = 0.7,
-                        max_tokens: Optional[int] = None,
-                        use_cache: bool = True) -> tuple[str, int, int]:
-        return cls._call_gpt("gpt-4o-mini", messages, temperature, max_tokens, use_cache=use_cache)
-    
-    @classmethod        
-    def call_gpt4v(cls, messages: List[Dict[str, Any]],
-                   temperature: float = 0.7,
-                   max_tokens: Optional[int] = None,
-                   use_cache: bool = True) -> tuple[str, int, int]:
-        return cls._call_gpt("gpt-4-vision-preview", messages, temperature, 
-                           max_tokens or 4096, use_cache=use_cache)
+                    print(f"{model} API call failed after {retries} attempts: {str(e)}")
+                    raise e
 
     @classmethod
     def clear_cache(cls) -> None:
         """Clear all cached responses"""
-        cls.cache.clear()
+        cache.clear()
+
+class DeepSeek_Interface(GPT_Interface):
+    client = OpenAI(
+        api_key=config["deepseek_api_key"],
+        base_url=config.get("deepseek_base_url")
+    )
+        
 
 if __name__ == "__main__":
-    GPT_Interface.clear_cache()
+    # GPT_Interface.clear_cache()
+    messages = [
+        {"role": "user", "content": "Hello, who are you?"}
+    ]
+    print(DeepSeek_Interface.call(model="deepseek-reasoner", messages=messages, use_cache=False))

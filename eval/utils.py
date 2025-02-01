@@ -105,7 +105,7 @@ Please evaluate the quality of the response. You must first provide a brief anal
         retry = 5
         for i in range(retry):
             try:
-                res = GPT_Interface.call_gpt4o(messages)[0]
+                res = GPT_Interface.call(model="gpt-4o", messages=messages)
                 res_json = extract_json(res)
                 print(res_json)
                 for d in dims:

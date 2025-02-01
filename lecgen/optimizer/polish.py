@@ -65,13 +65,13 @@ Please output only the script content, with no additional text or formatting.
             )
         )
 
-        response = GPT_Interface.call_gpt4o(messages=messages, use_cache=False)
+        response = GPT_Interface.call(model="gpt-4o", messages=messages, use_cache=False)
         
         if has_streamlit:
             progress_bar.progress(100)
             status_text.text("Script polishing complete!")
         
-        return response[0]
+        return response
         
     finally:
         # Clean up progress indicators

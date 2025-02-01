@@ -9,7 +9,7 @@ def lecgen_caption(imgs, output_dir):
     captions = dict()
     for i in tqdm(range(len(imgs))):
         messages = [dict(role="user", content=[dict(type="text", text=prompt_caption)] + [dict(type="image_url", image_url=dict(url=f"data:image/png;base64,{imgs[i]}"))])]
-        response = GPT_Interface.call_gpt4o(messages=messages)
+        response = GPT_Interface.call(model="gpt-4o", messages=messages)
         captions[str(i+1)] = response
         print(response)
     
@@ -21,7 +21,7 @@ def lecgen_caption(imgs, output_dir):
     res = []
     for i in tqdm(range(len(imgs))):
         messages = [dict(role="user", content=prompt.format(i=i+1, caption=captions[str(i+1)]))]
-        response = GPT_Interface.call_gpt4o(messages=history + messages)
+        response = GPT_Interface.call(model="gpt-4o", messages=messages)
         with open(f"{output_dir}/{i+1}.txt", "w") as f:
             f.write(response)
         print(response)

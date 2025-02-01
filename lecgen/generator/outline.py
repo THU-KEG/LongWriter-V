@@ -64,9 +64,7 @@ Note: You must generate an outline for every single slide, so please don't miss 
         for i in range(max_try):
             complete = True
             messages = [dict(role="user", content=[dict(type="text", text=prompt_outline)] + [dict(type="image_url", image_url=dict(url=img)) for img in imgs])]
-            response, it, ot = GPT_Interface.call_gpt4o(messages=messages, use_cache=False)
-            input_tokens += it
-            output_tokens += ot
+            response = GPT_Interface.call(model="gpt-4o", messages=messages, use_cache=False)
             outlines = extract_json(response)
             for j in range(len(imgs)):
                 if not str(j+1) in outlines:
@@ -107,10 +105,8 @@ Outline for this slide:
             prompt_gen_formatted = prompt_gen.format(outline=outlines[str(i+1)]["outline"],
                                                      target_words=outlines[str(i+1)]["target_words"])
             messages = [dict(role="user", content=[dict(type="text", text=prompt_gen_formatted)] + [dict(type="image_url", image_url=dict(url=imgs[i]))])] 
-            response, it, ot = GPT_Interface.call_gpt4o(messages=history + messages)
+            response = GPT_Interface.call(model="gpt-4o", messages=history + messages, use_cache=False)
             
-            input_tokens += it
-            output_tokens += ot
             messages.append(dict(role="assistant", content=response))
             history.extend(messages)
             res.append(response)
@@ -153,9 +149,7 @@ Please output only the rewritten script without any other text or formatting."""
                 next_script=next_script
             ))]
             
-            response, it, ot = GPT_Interface.call_gpt4o(messages=messages)
-            input_tokens += it
-            output_tokens += ot
+            response = GPT_Interface.call(model="gpt-4o", messages=messages)
             rewritten_res.append(response)
 
         update_progress("Script Rewriting", 100, "Script rewriting complete!")
@@ -169,7 +163,7 @@ Please output only the rewritten script without any other text or formatting."""
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(script)
         
-        return rewritten_res, input_tokens, output_tokens
+        return rewritten_res
     finally:
         # Clean up progress indicators
         if has_streamlit:

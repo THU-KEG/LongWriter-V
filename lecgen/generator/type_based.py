@@ -14,7 +14,7 @@ def classify_page_type(img):
         ])
     ]
     
-    response, _, _ = GPT_Interface.call_gpt4o(messages=messages)
+    response = GPT_Interface.call(model="gpt-4o", messages=messages)
 
     print(response)
     
@@ -59,7 +59,7 @@ def generate_script_by_type(img, page_type, prev_script=""):
         ])
     ]
     
-    script, _, _ = GPT_Interface.call_gpt4o(messages=messages)
+    script = GPT_Interface.call(model="gpt-4o", messages=messages)
     return script
 
 
