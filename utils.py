@@ -71,30 +71,23 @@ def extract_json(text: str) -> Dict:
     # Remove any markdown code block syntax first
     text = re.sub(r'```(?:json)?\s*(.*?)\s*```', r'\1', text, flags=re.DOTALL)
     
-    # Try direct parsing first
+    # Try to find and extract JSON-like substrings using a non-recursive pattern
+    # Look for balanced curly braces with content between them
+    json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+    json_matches = re.finditer(json_pattern, text, re.DOTALL)
+    
+    for match in json_matches:
+        try:
+            json_str = match.group()
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            continue
+            
+    # If no valid JSON found, try parsing the whole text
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # Use GPT to fix the JSON
-        from inference.api import GPT_Interface
-        try:
-            prompt = [
-                {
-                    "role": "system",
-                    "content": "You are a JSON repair expert. Fix the provided JSON by properly escaping strings and fixing any formatting issues. Return only the fixed JSON with no other text."
-                },
-                {
-                    "role": "user", 
-                    "content": f"Fix this malformed JSON:\n{text}"
-                }
-            ]
-            from datetime import datetime
-            print(f"calling gpt4o_mini to fix json at {datetime.now()}", prompt[0]['content'])
-            fixed_json, _, _ = GPT_Interface.call_gpt4o_mini(prompt, temperature=0)
-            print(f"gpt4o_mini response at {datetime.now()}", fixed_json)
-            return json.loads(fixed_json)
-        except Exception as e:
-            raise ValueError(f"Failed to parse JSON: {str(e)}")
+        raise ValueError("No valid JSON found in text")
 
 def count_words(text):
     chinese_characters = re.findall(r'[\u4e00-\u9fff]', text)
@@ -199,27 +192,25 @@ def _parallel_wrapper(args):
     Wrapper function for parallel processing that unpacks arguments.
     
     Args:
-        args: Tuple of (func, args, kwargs) where:
+        args: Tuple of (func, arg) where:
             - func: The function to execute
-            - args: List or tuple of positional arguments
-            - kwargs: Dictionary of keyword arguments
+            - arg: The argument to pass to the function
     """
-    func, args, kwargs = args[0], args[1], args[2] if len(args) > 2 else {}
+    func, arg = args[0], args[1]
     try:
-        return func(*args, **kwargs)
+        return func(arg)
     except Exception as e:
         print(f"Error processing with args {args}: {str(e)}")
         return None
 
-def parallel_process(func, args_list, num_processes=None, **kwargs):
+def parallel_process(func, args_list, num_processes=None):
     """
     Run a function across multiple processes for parallel processing.
     
     Args:
         func: The function to run in parallel
-        args_list: List of argument tuples/lists, each containing the arguments for one function call
+        args_list: List of arguments, each containing the argument for one function call
         num_processes: Number of processes to use (defaults to CPU count)
-        **kwargs: Additional keyword arguments to pass to each function call
         
     Returns:
         List of results from the function calls
@@ -228,7 +219,7 @@ def parallel_process(func, args_list, num_processes=None, **kwargs):
         num_processes = cpu_count()
     
     # Prepare arguments for each item
-    process_args = [(func, args, kwargs) for args in args_list]
+    process_args = [(func, args) for args in args_list]
     
     with Pool(processes=num_processes) as pool:
         results = list(tqdm(

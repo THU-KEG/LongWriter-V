@@ -3,11 +3,13 @@ import os
 from PIL import Image
 from typing import List, Dict
 import matplotlib.pyplot as plt
-from inference.local import ModelManager
+from inference.local.rm import get_model as get_rm_model
+from inference.local.reranker import get_model as get_reranker_model
 from tqdm import tqdm
 import json
 
-model_manager = ModelManager()
+rm_model = get_rm_model('rm')
+reranker_model = get_reranker_model('reranker')
 
 def eval_metrics(references: List[str], hypotheses: List[str], output_path: str = 'outputs/eval/metrics') -> Dict[str, float]:
     os.makedirs(output_path, exist_ok=True)
@@ -97,7 +99,7 @@ Transcript:
 Output:
 """
         msgs = [{'role': 'user', 'content': [img, prompt]}]
-        response = model_manager.inference_rm(msgs)
+        response = rm_model.inference(msgs)
         scores.append([float(x) for x in response.split(', ')])
 
     # Calculate averages
@@ -143,7 +145,7 @@ Output:
 def eval_reranker(references: List[str], hypotheses: List[str], output_path: str = 'outputs/eval/reranker') -> Dict[str, float]:
     os.makedirs(output_path, exist_ok=True)
     pairs = [(ref, hyp) for ref, hyp in zip(references, hypotheses)]
-    scores = model_manager.inference_reranker(pairs)
+    scores = reranker_model.inference(pairs)
     avg_score = sum(scores) / len(scores)
     scores_json = {
         'average_score': avg_score,

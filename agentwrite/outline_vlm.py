@@ -1,4 +1,4 @@
-from inference.api import GPT_Interface
+from inference.api.gpt import GPT_Interface
 from utils import encode_image_to_base64
 import re
 

@@ -1,7 +1,7 @@
 import os
 import json
 from pathlib import Path
-from inference.api import GPT_Interface
+from inference.api.gpt import GPT_Interface
 from utils import extract_json
 from tqdm import tqdm
 

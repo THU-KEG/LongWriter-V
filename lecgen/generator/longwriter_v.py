@@ -1,6 +1,5 @@
 from utils import extract_json
-from inference.local import ModelManager
-from inference.api import GPT_Interface
+from inference.local.qwen2_vl import get_model as get_qwen2_vl_model
 
 def longwriter_v(imgs):
     system_msg = {
@@ -18,12 +17,13 @@ For example, if there are 10 slides, your output must have exactly 10 entries wi
     ]
 
     # Try generating scripts with retries
-    model_manager = ModelManager()
+    model = get_qwen2_vl_model('longwriter-v')
+
     max_retry = 3
     
     for retry in range(max_retry):
         try:
-            res = GPT_Interface.call_gpt4o(messages=messages)[0]
+            res = model.inference_vllm(messages)
 
             print(res)    
 
