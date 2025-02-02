@@ -198,7 +198,7 @@ def _parallel_wrapper(args):
     """
     func, arg = args[0], args[1]
     try:
-        return func(arg)
+        return func(arg) if not isinstance(arg, tuple) else func(*arg)
     except Exception as e:
         print(f"Error processing with args {args}: {str(e)}")
         return None

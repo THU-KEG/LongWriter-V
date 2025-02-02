@@ -1,7 +1,7 @@
 import argparse
 from eval.utils import BaseEvaluator, get_image_path, print_res, print_res_head
-from inference.local.qwen2_vl import get_model as get_qwen2_vl_model
-from inference.local.qwen2_5_vl import get_model as get_qwen2_5_vl_model
+# from inference.local.qwen2_vl import get_model as get_qwen2_vl_model
+# from inference.local.qwen2_5_vl import get_model as get_qwen2_5_vl_model
 
 class VLMEvaluator(BaseEvaluator):
     """Evaluator that uses VLM models directly for prediction"""
@@ -18,15 +18,20 @@ class VLMEvaluator(BaseEvaluator):
         messages = [{"role": "user", "content": [
             {"type": "text", "text": question}
         ] + [{"type": "image", "image": "file://" + p} for p in image_path]}]
+
+        sample_params = {
+            "temperature": 0.0,
+            "max_tokens": 8192,
+        }
         
         if self.model_type == 'qwen2-vl-7b':
             if self.model is None:
-                self.model = get_qwen2_vl_model('7b')
-            res = self.model.inference(messages)
+                self.model = get_qwen2_vl_model('ablation-multi_image', tensor_parallel_size=4)
+            res = self.model.inference_vllm(messages, **sample_params)[0]
         elif self.model_type == 'qwen2-vl-72b':
             if self.model is None:
                 self.model = get_qwen2_vl_model('72b')
-            res = self.model.inference(messages)
+            res = self.model.inference_vllm(messages, **sample_params)[0]
         elif self.model_type == 'qwen2.5-vl-7b':
             if self.model is None:
                 self.model = get_qwen2_5_vl_model('7b')

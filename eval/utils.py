@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from utils import count_words, encode_image_to_base64, extract_json
+from utils import count_words, extract_json, parallel_process
 from inference.api.gpt import GPT_Interface
 from tqdm import tqdm
 from abc import ABC, abstractmethod
@@ -16,13 +16,6 @@ def get_image_path(idx, row):
         return [os.path.join(image_base_path, p) for p in image_paths]
     else:
         return [os.path.join(image_base_path, str(idx) + '.jpg')]
-
-def length_score(x, y):
-    """Calculate length score based on target length y and actual length x"""
-    if y > x:
-        return 100 * max(0, 1. - (y / x - 1) / 3)
-    else:
-        return 100 * max(0, 1. - (x / y - 1) / 2)
 
 class BaseEvaluator(ABC):
     """Base class for all evaluators"""
@@ -103,11 +96,12 @@ Please evaluate the quality of the response. You must first provide a brief anal
         ] + [{"type": "image", "image": "file://" + p} for p in image_path]}]
         
         retry = 5
+        use_cache = True
         for i in range(retry):
             try:
-                res = GPT_Interface.call(model="gpt-4o", messages=messages)
+                res = GPT_Interface.call(model="gpt-4o", messages=messages, use_cache=use_cache, temperature=0.8)
+                print(res)
                 res_json = extract_json(res)
-                print(res_json)
                 for d in dims:
                     if d in res_json and res_json[d] in range(1, 6):
                         continue
@@ -118,6 +112,7 @@ Please evaluate the quality of the response. You must first provide a brief anal
                 print(f"GPT API call failed due to {e}, retrying... ({i+1}/{retry})")
                 if i == retry - 1:  # Last retry
                     raise e
+                use_cache = False
                 continue
     
     def evaluate_single(self, idx, row):
@@ -228,6 +223,8 @@ def print_res(model_res):
 
 def length_score(x, y):
     """Calculate length score based on target length y and actual length x"""
+    x = max(x, 2)
+    y = max(y, 2)
     if y > x:
         return 100 * max(0, 1. - (y / x - 1) / 3)
     else:
@@ -253,5 +250,9 @@ if __name__ == "__main__":
         "Qwen2.5-VL-7B": "data/MMLongBench_Write_VLM_qwen2.5-vl-7b.xlsx",
         "Qwen2.5-VL-72B": "data/MMLongBench_Write_VLM_qwen2.5-vl-72b.xlsx",
     }
+    ablation_res = {
+        'Without Multi-Image': "data/MMLongBench_Write_VLM_ablation-single_image.xlsx",
+        'Without Single-Image': "data/MMLongBench_Write_VLM_ablation-multi_image.xlsx",
+    }
     print_res_head()
-    print_res(model_res)
+    print_res(ablation_res)

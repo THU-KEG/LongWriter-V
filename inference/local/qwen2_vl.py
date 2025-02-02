@@ -34,7 +34,8 @@ class Qwen2VL(BaseModel):
             self.model = LLM(
                 model=self.model_path, 
                 trust_remote_code=True, 
-                tensor_parallel_size=self.load_kwargs.get("tensor_parallel_size", 8)
+                tensor_parallel_size=self.load_kwargs.get("tensor_parallel_size", 8),
+                limit_mm_per_prompt={"image":26}
             )
             self.processor = AutoProcessor.from_pretrained(
                 self.model_path,
@@ -109,14 +110,16 @@ class Qwen2VL(BaseModel):
         return all_texts
 
 
-def get_model(type):
+def get_model(type, **kwargs):
     map = {
         "7b": "/model/base/qwen/Qwen2-VL-7B-Instruct",
         "72b": "/model/base/qwen/Qwen2-VL-72B-Instruct",
         "longwriter-v": "/model/trained/qwen/qwen2_vl-7b/inst_and_part_scripts_sample_10k_back_translated_5k",
         "longwriter-v-72b": "/model/trained/qwen/qwen2_vl-72b/inst_and_part_scripts_sample_10k_back_translated_5k",
+        'ablation-single_image': '/model/trained/qwen/qwen2_vl-7b/sft_single_image_back_translated_5k/',
+        'ablation-multi_image': '/model/trained/qwen/qwen2_vl-7b/sft_multi_image_back_translated_5k/'
     }
-    return Qwen2VL(map[type])
+    return Qwen2VL(map[type], **kwargs)
 
 
 if __name__ == "__main__":
