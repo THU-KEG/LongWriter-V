@@ -1,5 +1,7 @@
 import argparse
 from eval.utils import BaseEvaluator, get_image_path, print_res, print_res_head
+from inference.api.gpt import GPT_Interface
+from utils import encode_image_to_base64
 # from inference.local.qwen2_vl import get_model as get_qwen2_vl_model
 # from inference.local.qwen2_5_vl import get_model as get_qwen2_5_vl_model
 
@@ -21,10 +23,26 @@ class VLMEvaluator(BaseEvaluator):
 
         sample_params = {
             "temperature": 0.0,
-            "max_tokens": 8192,
+            "max_tokens": 4096,
         }
         
-        if self.model_type == 'qwen2-vl-7b':
+        if self.model_type == 'gpt-4o':
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": question
+                        }
+                    ] +
+                    [{
+                        "type": "image_url",
+                        "image_url": {"url": encode_image_to_base64(p)}} for p in image_path]
+                }
+            ]
+            res = GPT_Interface.call(model='gpt-4o-2024-05-13', messages=messages, use_cache=False, **sample_params)
+        elif self.model_type == 'qwen2-vl-7b':
             if self.model is None:
                 self.model = get_qwen2_vl_model('ablation-multi_image', tensor_parallel_size=4)
             res = self.model.inference_vllm(messages, **sample_params)[0]
@@ -48,6 +66,14 @@ class VLMEvaluator(BaseEvaluator):
             if self.model is None:
                 self.model = get_qwen2_vl_model('longwriter-v-72b')
             res = self.model.inference(messages)
+        elif self.model_type == 'longwriter-v-7b-dpo':
+            if self.model is None:
+                self.model = get_qwen2_vl_model('longwriter-v-7b-dpo', tensor_parallel_size=4)
+            res = self.model.inference_vllm(messages, **sample_params)[0]
+        elif self.model_type == 'longwriter-v-7b-dpo-iter':
+            if self.model is None:
+                self.model = get_qwen2_vl_model('longwriter-v-7b-dpo-iter', tensor_parallel_size=4)
+            res = self.model.inference_vllm(messages, **sample_params)[0]
         else:
             raise ValueError(f"Unsupported model: {self.model_type}")
             
@@ -55,10 +81,13 @@ class VLMEvaluator(BaseEvaluator):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, choices=['qwen2-vl-7b', 'qwen2-vl-72b', 'qwen2.5-vl-7b', 'qwen2.5-vl-72b', 'longwriter-v', 'longwriter-v-72b'], default='qwen2-vl-7b', help='Model type to use for prediction')
+    parser.add_argument('--model', type=str, choices=['gpt-4o', 'qwen2-vl-7b', 'qwen2-vl-72b', 'qwen2.5-vl-7b', 'qwen2.5-vl-72b', 'longwriter-v', 'longwriter-v-72b', 'longwriter-v-7b-dpo', 'longwriter-v-7b-dpo-iter'], default='qwen2-vl-7b', help='Model type to use for prediction')
     parser.add_argument('--data_path', type=str, default='data/MMLongBench_Write.xlsx', help='Path to the data file')
     parser.add_argument('--output_path', type=str, default='data/MMLongBench_Write_VLM.xlsx', help='Path to the output file')
     args = parser.parse_args()
+    
+    if args.output_path == 'data/MMLongBench_Write_VLM.xlsx':
+        args.output_path = args.data_path.replace('.xlsx', '_VLM') + f'_{args.model}.xlsx'
 
     evaluator = VLMEvaluator(
         data_path=args.data_path,

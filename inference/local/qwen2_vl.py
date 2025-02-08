@@ -114,7 +114,9 @@ def get_model(type, **kwargs):
     map = {
         "7b": "/model/base/qwen/Qwen2-VL-7B-Instruct",
         "72b": "/model/base/qwen/Qwen2-VL-72B-Instruct",
-        "longwriter-v": "/model/trained/qwen/qwen2_vl-7b/inst_and_part_scripts_sample_10k_back_translated_5k",
+        "longwriter-v-7b": "/model/trained/qwen/qwen2_vl-7b/inst_and_part_scripts_sample_10k_back_translated_5k",
+        "longwriter-v-7b-dpo": "/home/test/test09/wyuc/model/trained/qwen/qwen2_vl-7b/dpo/lec_full/checkpoint-30",
+        "longwriter-v-7b-dpo-iter": "/home/test/test09/wyuc/model/trained/qwen/qwen2_vl-7b/dpo/lec_iter_full",
         "longwriter-v-72b": "/model/trained/qwen/qwen2_vl-72b/inst_and_part_scripts_sample_10k_back_translated_5k",
         'ablation-single_image': '/model/trained/qwen/qwen2_vl-7b/sft_single_image_back_translated_5k/',
         'ablation-multi_image': '/model/trained/qwen/qwen2_vl-7b/sft_multi_image_back_translated_5k/'
@@ -123,9 +125,9 @@ def get_model(type, **kwargs):
 
 
 if __name__ == "__main__":
-    msgs = [{"role": "user", "content": "你好，你是谁？"}]
-    model = get_model("7b")
-    # print(model.inference(msgs))
+    msgs = [{"role": "user", "content": [{"type": "text", "text": "What is depicted in the image?"}, {"type": "image", "image": "buffer/1.1 自主学习原理/images/1.png"}]}]
+    model = get_model("longwriter-v")
+    print(model.inference(msgs))
     del model
     model = get_model("72b")
     print(model.inference_vllm(msgs, max_tokens=8192, temperature=0.9, top_p=0.9, n=5))

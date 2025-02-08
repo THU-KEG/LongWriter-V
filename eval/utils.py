@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from utils import count_words, extract_json, parallel_process
+from utils import count_words, extract_json, encode_image_to_base64
 from inference.api.gpt import GPT_Interface
 from tqdm import tqdm
 from abc import ABC, abstractmethod
@@ -9,7 +9,7 @@ dims = ['Relevance', 'Accuracy', 'Coherence', 'Clarity', 'Breadth and Depth', 'R
 
 def get_image_path(idx, row):
     """Get image path(s) from row data"""
-    image_base_path = os.getenv('IMAGE_BASE_PATH')
+    image_base_path = os.getenv('IMAGE_BASE_PATH', 'data/MMLongBench_Write')
     image_path = row['image_path']
     if isinstance(image_path, str) and image_path.startswith('[') and image_path.endswith(']'):
         image_paths = eval(image_path)
@@ -93,7 +93,7 @@ Please evaluate the quality of the response. You must first provide a brief anal
         image_path = get_image_path(idx, row)
         messages = [{"role": "user", "content": [
             {"type": "text", "text": task_description.replace("$INST$", row['question']).replace("$RESPONSE$", row['prediction'])}
-        ] + [{"type": "image", "image": "file://" + p} for p in image_path]}]
+        ] + [{"type": "image_url", "image_url": {"image": encode_image_to_base64(p)}} for p in image_path]}]
         
         retry = 5
         use_cache = True
@@ -149,17 +149,22 @@ Please evaluate the quality of the response. You must first provide a brief anal
             res = self.predict(idx, row)
             print(res, flush=True)
             self.data.loc[idx, 'prediction'] = str(res)
+            self.data.to_excel(self.output_path, index=False)
             
         self.data.to_excel(self.output_path, index=False)
         
         # Second pass: Evaluate predictions
         for idx, row in tqdm(self.data.iterrows(), total=len(self.data)):
+            if row['quality_scores'] is not None and not pd.isna(row['quality_scores']):
+                continue
+            
             res = self.evaluate_single(idx, row)
             for col, value in res.items():
                 if col != 'quality_scores':
                     self.data.loc[idx, col] = float(value)
                 else:
                     self.data.loc[idx, col] = str(value)
+            self.data.to_excel(self.output_path, index=False)
         
         self.data.to_excel(self.output_path, index=False)
         return self.data

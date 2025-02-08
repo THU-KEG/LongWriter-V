@@ -107,11 +107,17 @@ class DeepSeek_Interface(GPT_Interface):
         api_key=config["deepseek_api_key"],
         base_url=config.get("deepseek_base_url")
     )
+
+class VllmServer_Interface(GPT_Interface):
+    client = OpenAI(
+        api_key=config["vllm_api_key"],
+        base_url=config.get("vllm_base_url")
+    )
         
 
 if __name__ == "__main__":
     # GPT_Interface.clear_cache()
     messages = [
-        {"role": "user", "content": "Hello, who are you?"}
+        {"role": "user", "content": "在一个python项目中，有没有什么优雅的方式可以在任意文件中获取当前项目的根目录地址"}
     ]
-    print(DeepSeek_Interface.call(model="deepseek-reasoner", messages=messages, use_cache=False))
+    print(VllmServer_Interface.call(model="/model/trained/qwen/qwen2_vl-72b/inst_and_part_scripts_sample_10k_back_translated_5k", messages=messages, use_cache=False))

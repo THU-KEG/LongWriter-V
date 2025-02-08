@@ -14,3 +14,5 @@ ppt2png
 tmp
 *.tar
 *.db
+
+buffer
