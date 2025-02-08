@@ -93,13 +93,13 @@ Please evaluate the quality of the response. You must first provide a brief anal
         image_path = get_image_path(idx, row)
         messages = [{"role": "user", "content": [
             {"type": "text", "text": task_description.replace("$INST$", row['question']).replace("$RESPONSE$", row['prediction'])}
-        ] + [{"type": "image_url", "image_url": {"image": encode_image_to_base64(p)}} for p in image_path]}]
+        ] + [{"type": "image_url", "image_url": {"url": encode_image_to_base64(p)}} for p in image_path]}]
         
         retry = 5
         use_cache = True
         for i in range(retry):
             try:
-                res = GPT_Interface.call(model="gpt-4o", messages=messages, use_cache=use_cache, temperature=0.8)
+                res = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, use_cache=use_cache, temperature=0.8)
                 print(res)
                 res_json = extract_json(res)
                 for d in dims:
