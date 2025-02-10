@@ -1,5 +1,6 @@
 from vllm import LLM, SamplingParams
 from inference.local.base import BaseModel
+import json
 
 class Mistral(BaseModel):
     def __init__(self, model_path: str, **kwargs):
@@ -25,10 +26,10 @@ class Mistral(BaseModel):
         return res[0].outputs[0].text
 
 def get_model(type):
-    map = {
-        "large-instruct-2407": "/model/base/mistralai/Mistral-Large-Instruct-2407",
-    }
-    return Mistral(map[type])
+    with open("config.json", "r") as f:
+        config = json.load(f)
+    model_paths = config["model_paths"]["mistral"]
+    return Mistral(model_paths[type])
 
 
 if __name__ == "__main__":

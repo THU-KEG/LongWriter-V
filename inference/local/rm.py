@@ -2,6 +2,7 @@ from inference.local.base import BaseModel
 from transformers import AutoModel, AutoTokenizer
 import torch
 from typing import List, Dict
+import json
 
 class RM(BaseModel):
     def __init__(self, model_path: str):
@@ -23,5 +24,7 @@ class RM(BaseModel):
         return answer
 
 def get_model(type):
-    model_path = "/model/eval/"
-    return RM(model_path)
+    with open("config.json", "r") as f:
+        config = json.load(f)
+    model_paths = config["model_paths"]["rm"]
+    return RM(model_paths["base"])

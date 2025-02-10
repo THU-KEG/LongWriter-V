@@ -1,4 +1,5 @@
 from inference.local.base import BaseModel
+from peft import PeftModel
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
 import torch
 from transformers import (
@@ -7,6 +8,7 @@ from transformers import (
 )
 from qwen_vl_utils import process_vision_info
 from vllm import LLM, SamplingParams
+import json
 
 
 class Qwen2VL(BaseModel):
@@ -42,6 +44,60 @@ class Qwen2VL(BaseModel):
                 min_pixels=self.load_kwargs.get("min_pixels", 50176),
                 max_pixels=self.load_kwargs.get("max_pixels", 1048576)
             )
+    
+    def _load_lora(self, lora_path):
+        if self.model is None or self.processor is None:
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                self.model_path,
+                device_map='cuda:0',
+                attn_implementation='flash_attention_2',
+                torch_dtype=torch.bfloat16
+            )
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_path,
+                device_map='cuda:0',
+                min_pixels=self.load_kwargs.get("min_pixels", 50176),
+                max_pixels=self.load_kwargs.get("max_pixels", 1048576)
+            )
+            self.model = PeftModel.from_pretrained(self.model, lora_path, device_map="cuda:0")
+            self.model = self.model.merge_and_unload()
+            lora_params = [n for n, _ in self.model.named_parameters() if 'lora' in n]
+            print(f"Found {len(lora_params)} LoRA parameters")
+    
+    def inference_lora(self, msgs, lora_path, **kwargs):
+        self._load_lora(lora_path)
+       
+        text = self.processor.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True
+        )
+    
+        image_inputs, video_inputs = process_vision_info(msgs)
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+    
+        # Move all input tensors to cuda:0
+        inputs = {k: v.to("cuda:0") for k, v in inputs.items()}
+        
+        generated_ids = self.model.generate(
+            **inputs,
+            **kwargs
+        )
+        
+        generated_ids_trimmed = [
+            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs['input_ids'], generated_ids)
+        ]
+        
+        output_text = self.processor.batch_decode(
+            generated_ids_trimmed, 
+            skip_special_tokens=True, 
+            clean_up_tokenization_spaces=True
+        )
+        return output_text[0]
     
     def inference(self, msgs, **kwargs):
         self._load()
@@ -111,17 +167,10 @@ class Qwen2VL(BaseModel):
 
 
 def get_model(type, **kwargs):
-    map = {
-        "7b": "/model/base/qwen/Qwen2-VL-7B-Instruct",
-        "72b": "/model/base/qwen/Qwen2-VL-72B-Instruct",
-        "longwriter-v-7b": "/model/trained/qwen/qwen2_vl-7b/inst_and_part_scripts_sample_10k_back_translated_5k",
-        "longwriter-v-7b-dpo": "/home/test/test09/wyuc/model/trained/qwen/qwen2_vl-7b/dpo/lec_full/checkpoint-30",
-        "longwriter-v-7b-dpo-iter": "/home/test/test09/wyuc/model/trained/qwen/qwen2_vl-7b/dpo/lec_iter_full",
-        "longwriter-v-72b": "/model/trained/qwen/qwen2_vl-72b/inst_and_part_scripts_sample_10k_back_translated_5k",
-        'ablation-single_image': '/model/trained/qwen/qwen2_vl-7b/sft_single_image_back_translated_5k/',
-        'ablation-multi_image': '/model/trained/qwen/qwen2_vl-7b/sft_multi_image_back_translated_5k/'
-    }
-    return Qwen2VL(map[type], **kwargs)
+    with open("config.json", "r") as f:
+        config = json.load(f)
+    model_paths = config["model_paths"]["qwen2_vl"]
+    return Qwen2VL(model_paths[type], **kwargs)
 
 
 if __name__ == "__main__":
