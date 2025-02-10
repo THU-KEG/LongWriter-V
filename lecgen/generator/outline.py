@@ -1,174 +1,236 @@
 import os
 import json
 from pathlib import Path
-from inference.api.gpt import GPT_Interface
+from inference.api.gpt import GPT_Interface, DeepSeek_Interface
 from utils import extract_json
 from tqdm import tqdm
+from lecgen.generator.type import classify_page_type
 
-def lecgen_outline(imgs, output_dir):
+def lecgen_outline(imgs, output_dir, progress_manager):
 
     os.makedirs(output_dir, exist_ok=True)
 
     number_of_slides = len(imgs)
+    # Outline Generation Stage
+    progress_manager.update_progress("Outline Generation", 0, "Generating outlines...")
+    prompt_outline = f"""You are an excellent teacher. Your task is to analyze the PPT slides and generate a comprehensive lecture outline.
 
-    input_tokens = 0
-    output_tokens = 0
+When analyzing each slide, consider its characteristics and purpose:
+- Is it a title or transition slide with prominent headings and minimal content?
+- Is it a knowledge-focused slide with detailed information, diagrams, or explanations?
+- Is it an interactive slide with questions, exercises, or discussion prompts?
 
-
-    # Initialize progress tracking
-    try:
-        import streamlit as st
-        with st.sidebar:
-            st.markdown("### Generation Progress")
-            progress_container = st.empty()
-            status_text = st.empty()
-        has_streamlit = True
-    except:
-        has_streamlit = False
-    
-    # Update progress function
-    def update_progress(stage, progress, status):
-        if has_streamlit:
-            status_text.text(status)
-            progress_value = progress / 100.0  # Convert percentage to 0-1 range
-            with progress_container:
-                st.progress(progress_value, f"{stage}")
-    
-    try:
-        # Outline Generation Stage
-        update_progress("Outline Generation", 0, "Generating outlines...")
-        prompt_outline = f"""You are an excellent teacher. Your task is to generate a lecture outline for all the provided PPT slides. You should consider the entire course content holistically and generate a brief outline for each slide, describing what content should be included in the lecture script, including key points to teach and logical connections between slides. You don't need to elaborate on each point - just briefly describe what content should be included.
+Based on the slide's nature, generate an appropriate outline that:
+- Matches the slide's teaching purpose (introducing topics, explaining concepts, or engaging students)
+- Includes key points to teach
+- Establishes logical connections with other slides
+- Suggests appropriate teaching approach (brief introduction, detailed explanation, or interactive discussion)
+- Allocates suitable word count based on content density
 
 Please analyze the language of the slides and respond in the same language as the slides.
-
-For each slide, please also specify a target word count that adds up to (number of slides * 200) = {number_of_slides * 200} words total. For example, if there are 3 slides, allocate the 600 total words across the slides based on content density.
+The total word count should add up to (number of slides * 200) = {number_of_slides * 200} words.
 
 Please output in the following format:
-    ```
-    {{
-        "1": {{
-            "outline": "Outline for first slide",
-            "target_words": 120
-        }},
-        "2": {{
-            "outline": "Outline for second slide", 
-            "target_words": 180
-        }},
-        ...
-    }}
-    ```
+```
+{{
+    "1": {{
+        "outline": "Outline for first slide",
+        "target_words": 120
+    }},
+    "2": {{
+        "outline": "Outline for second slide", 
+        "target_words": 180
+    }},
+    ...
+}}
+```
 
-Note: You must generate an outline for every single slide, so please don't miss any slides. The length of your output JSON must match the number of slides. Please verify that your output includes an outline for every slide. Output only the JSON result without any other content. The sum of all target_words should equal (number of slides * 200) = {number_of_slides * 200}.
-"""
-        max_try = 3
-        for i in range(max_try):
-            complete = True
-            messages = [dict(role="user", content=[dict(type="text", text=prompt_outline)] + [dict(type="image_url", image_url=dict(url=img)) for img in imgs])]
-            response = GPT_Interface.call(model="gpt-4o", messages=messages, use_cache=False)
-            outlines = extract_json(response)
-            for j in range(len(imgs)):
-                if not str(j+1) in outlines:
-                    complete = False
-                    break
-            if complete:
+Note: You must generate an outline for every single slide. The length of your output JSON must match the number of slides. The sum of all target_words should equal {number_of_slides * 200}. Output only the JSON result."""
+
+    max_try = 3
+    use_cache = True
+    for i in range(max_try):
+        complete = True
+        messages = [dict(role="user", content=[dict(type="text", text=prompt_outline)] + [dict(type="image_url", image_url=dict(url=img)) for img in imgs])]
+        response = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, use_cache=use_cache)
+        use_cache = False
+        outlines = extract_json(response)
+        for j in range(len(imgs)):
+            if not str(j+1) in outlines:
+                complete = False
                 break
-        if not complete:
-            raise ValueError("Failed to generate complete outlines")
+        if complete:
+            break
+    if not complete:
+        raise ValueError("Failed to generate complete outlines")
 
-        update_progress("Outline Generation", 100, "Outlines generated!")
-        
-        with open(f"{output_dir}/outline.json", "w") as f:
-            json.dump(outlines, f, ensure_ascii=False, indent=4)
+    progress_manager.update_progress("Outline Generation", 100, "Outlines generated!")
+    
+    with open(f"{output_dir}/outline.json", "w") as f:
+        json.dump(outlines, f, ensure_ascii=False, indent=4)
 
-        # Initial Script Generation Stage
-        prompt_gen = """You are an excellent teacher. Your task is to generate a lecture script based on the provided outline and PPT slide. The script should:
-1. Cover all content points described in the outline
-2. Match the content shown in the PPT slide
-3. Flow naturally from the previous slide's script as part of the same lecture
-4. Be engaging and educational, inspiring students' interest and critical thinking
-5. Be limited to {target_words} words maximum
+    # Initial Script Generation Stage
+    system_prompt = """You are an excellent teacher creating lecture scripts for online teaching. Follow these core principles:
 
-Please analyze the language of the slides and respond in the same language as the slides.
+1. Information Fragmentation (碎片化原则):
+   - Break down information into digestible chunks
+   - Maintain appropriate information density
+   - Keep learner's attention and reduce cognitive load
+   - Avoid overwhelming students with too much information at once
 
-Please output only the lecture script content without any other text. Keep your response within {target_words} words.
+2. PPT-Script Correspondence (对应原则):
+   - Strictly align script content with PPT content
+   - Use the same examples as shown in slides
+   - Follow the same information organization order
+   - Ensure perfect synchronization between visual and audio
+
+3. Cognitive Load Optimization (降低认知成本原则):
+   - Use language that's easy to understand
+   - Follow students' cognitive patterns
+   - Use precise vocabulary and simple sentence structures
+   - Make complex concepts accessible and clear
+
+Your goal is to create natural, engaging scripts that make learning efficient and enjoyable."""
+
+    prompt_gen = """Generate a lecture script for this PPT slide that follows the provided outline.
+
+Key Requirements:
+1. Follow Outline Strictly:
+   - Cover all points mentioned in the outline
+   - Follow the same logical structure as the outline
+   - Maintain the same emphasis and priorities
+   - Keep the same teaching sequence
+
+2. Match PPT Content:
+   - Cover exactly what's shown on the slide
+   - Use the same examples and cases
+   - Follow the same content order
+   - Stay within {target_words} words
+
+3. Language and Style:
+   - Use simple, clear language
+   - Break down complex concepts
+   - Make content easily digestible
+   - MOST IMPORTANT: Use the same language as the slide (Chinese for Chinese slides, English for English slides)
+
+4. Teaching Approach:
+   - Explain concepts step by step
+   - Connect with previous knowledge
+   - Use a natural teaching rhythm
+   - Make abstract concepts concrete
+
+Please output only the script content without any other text.
 
 Outline for this slide:
 {outline}"""
-        history = []
-        ctx_len = 5
 
-        res = []
-        for i in tqdm(range(len(imgs)), desc="Generating initial scripts"):
-            progress = int((i + 1) / len(imgs) * 100)
-            update_progress("Initial Script Generation", progress, f"Generating initial script for slide {i+1}/{len(imgs)}...")
-            
-            prompt_gen_formatted = prompt_gen.format(outline=outlines[str(i+1)]["outline"],
-                                                     target_words=outlines[str(i+1)]["target_words"])
-            messages = [dict(role="user", content=[dict(type="text", text=prompt_gen_formatted)] + [dict(type="image_url", image_url=dict(url=imgs[i]))])] 
-            response = GPT_Interface.call(model="gpt-4o", messages=history + messages, use_cache=False)
-            
-            messages.append(dict(role="assistant", content=response))
-            history.extend(messages)
-            res.append(response)
-            if len(history) > ctx_len*2:
-                history = history[-ctx_len*2:]
+    history = []
+    ctx_len = 3
+
+    res = []
+    for i in tqdm(range(len(imgs)), desc="Generating initial scripts"):
+        progress = int((i + 1) / len(imgs) * 100)
+        progress_manager.update_progress("Initial Script Generation", progress, f"Generating initial script for slide {i+1}/{len(imgs)}...")
         
-        update_progress("Initial Script Generation", 100, "Initial scripts generated!")
+        slide_num = str(i + 1)
         
-        # Rewrite Stage
-        prompt_rewrite = """You are an excellent editor. Your task is to rewrite this lecture script section to:
-1. Flow naturally with the previous and next sections
-2. Stay within the {target_words} word limit while preserving key content
-3. Maintain an engaging and educational tone
-4. Keep the same language as the original
-
-Previous section (for context):
-{prev_script}
-
-Current script to rewrite:
-{current_script}
-
-Next section (for context):
-{next_script}
-
-Please output only the rewritten script without any other text or formatting."""
-
-        rewritten_res = []
-        for i in tqdm(range(len(res)), desc="Rewriting scripts"):
-            progress = int((i + 1) / len(res) * 100)
-            update_progress("Script Rewriting", progress, f"Rewriting script for slide {i+1}/{len(res)}...")
-            
-            prev_script = res[i-1] if i > 0 else "<<START OF LECTURE>>"
-            current_script = res[i]
-            next_script = res[i+1] if i < len(res)-1 else "<<END OF LECTURE>>"
-            
-            messages = [dict(role="user", content=prompt_rewrite.format(
-                target_words=outlines[str(i+1)]['target_words'],
-                prev_script=prev_script,
-                current_script=current_script,
-                next_script=next_script
-            ))]
-            
-            response = GPT_Interface.call(model="gpt-4o", messages=messages)
-            rewritten_res.append(response)
-
-        update_progress("Script Rewriting", 100, "Script rewriting complete!")
+        prompt_gen_formatted = prompt_gen.format(
+            outline=outlines[slide_num]["outline"],
+            target_words=outlines[slide_num]["target_words"]
+        )
+        messages = [
+            dict(role="system", content=system_prompt),
+            dict(role="user", content=[dict(type="text", text=prompt_gen_formatted)] + [dict(type="image_url", image_url=dict(url=imgs[i]))])
+        ] 
+        response = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=history + messages)
         
-        # Save rewritten scripts
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        messages.append(dict(role="assistant", content=response))
+        history.extend(messages)
+        res.append(response)
+        if len(history) > ctx_len*2:
+            history = history[-ctx_len*2:]
+    
+    progress_manager.update_progress("Initial Script Generation", 100, "Initial scripts generated!")
+    
+    # Continuity Fix Phase
+    system_prompt_continuity = """You are a professional lecture script editor. Your task is to improve the flow and continuity of an entire lecture's scripts.
 
-        for i, script in enumerate(rewritten_res, 1):
-            output_file = output_dir / f"{i}.txt"
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(script)
-        
-        return rewritten_res
-    finally:
-        # Clean up progress indicators
-        if has_streamlit:
-            try:
-                progress_container.empty()
-                status_text.empty()
-            except:
-                pass
+Two critical requirements:
+1. Language Matching: ALWAYS maintain the exact same language as the original scripts (Chinese for Chinese, English for English)
+2. Content Boundaries: Each slide's content must stay within its own boundaries - do not copy or move content between slides"""
+
+    prompt_fix_continuity = """Here are all the lecture scripts. Please improve their flow and continuity while maintaining each script's core content.
+
+Original Scripts:
+{scripts_json}
+
+Requirements:
+1. Keep the exact same language as the original scripts
+2. Keep each slide's core content unchanged
+3. Improve transitions and flow between slides
+4. Keep each script within its word limit
+
+Output the improved scripts in valid JSON format with slide numbers as keys and improved scripts as values. For example:
+{{"1": "improved script 1", "2": "improved script 2", ...}}
+
+Output only the JSON."""
+
+    # Single GPT-4 call for all scripts
+    progress_manager.update_progress("Continuity Fix", 50, "Improving lecture flow...")
+    
+    # Prepare scripts in JSON format
+    scripts_json = {str(i+1): script for i, script in enumerate(res)}
+    
+    messages = [
+        dict(role="system", content=system_prompt_continuity),
+        dict(role="user", content=prompt_fix_continuity.format(
+            scripts_json=json.dumps(scripts_json, ensure_ascii=False, indent=2)
+        ))
+    ]
+    
+    # Retry mechanism
+    max_try = 3
+    use_cache = True
+    fixed_scripts = res  # Default to original scripts
+    
+    for attempt in range(max_try):
+        try:
+            response = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, max_tokens=8192, use_cache=use_cache)
+            print(response)
+            use_cache = False
+            improved_scripts = extract_json(response)
+            
+            # Validate all slides are present
+            complete = True
+            temp_scripts = []
+            for i in range(len(res)):
+                slide_num = str(i + 1)
+                if slide_num not in improved_scripts:
+                    print(f"Missing script for slide {slide_num} in attempt {attempt + 1}")
+                    complete = False
+                    break
+                temp_scripts.append(improved_scripts[slide_num])
+            
+            if complete:
+                fixed_scripts = temp_scripts
+                print(f"Successfully improved scripts on attempt {attempt + 1}")
+                break
+                
+        except Exception as e:
+            print(f"Error in attempt {attempt + 1}: {e}")
+            if attempt == max_try - 1:
+                print("All attempts failed, falling back to original scripts")
+    
+    progress_manager.update_progress("Continuity Fix", 100, "Continuity fixes complete!")
+    
+    # Save final scripts
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for i, script in enumerate(fixed_scripts, 1):
+        output_file = output_dir / f"{i}.txt"
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(script)
+    
+    progress_manager.cleanup()
+    return fixed_scripts
