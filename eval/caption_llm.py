@@ -1,5 +1,5 @@
 import argparse
-from eval.utils import BaseEvaluator, get_image_path, print_res, print_res_head
+from eval.utils import BaseEvaluator, get_image_path, print_res
 from inference.api.gpt import GPT_Interface, DeepSeek_Interface
 from utils import encode_image_to_base64
 
@@ -80,21 +80,32 @@ $CAPTIONS$
 Please provide a comprehensive response that fully satisfies the writing requirement while effectively utilizing the information from the image captions.
         """.replace("$QUESTION$", question).replace("$CAPTIONS$", str(captions))
         
+        sample_params = {
+            "temperature": 0.6,
+            "max_tokens": 8192,
+            "top_p": 0.95,
+            "top_k": 0,
+        }
+        
         messages = [{"role": "user", "content": prompt}]        
         if self.model_type == 'gpt-4o':
-            res = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, use_cache=False, max_tokens=8192)
+            sample_params.pop('top_k')
+            res = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, use_cache=False, **sample_params)
         elif self.model_type == 'deepseek-reasoner':
-            res = DeepSeek_Interface.call(model='deepseek-reasoner', messages=messages, use_cache=False, max_tokens=8192)
-        elif self.model_type == 'glm-4-9b':
+            sample_params.pop('top_k')
+            res = DeepSeek_Interface.call(model='Pro/deepseek-ai/DeepSeek-R1', messages=messages, use_cache=False, **sample_params)
+        elif self.model_type == 'glm-4-9b': # Done
+            sample_params["top_k"] = -1
             if self.model is None:
                 from inference.local.glm import get_model as get_glm_model
-                self.model = get_glm_model('glm-4-9b')
-            res = self.model.inference_vllm(messages)
+                self.model = get_glm_model('9b-chat')
+            res = self.model.inference_vllm(messages, **sample_params)
         elif self.model_type == 'mistral-large-instruct-2407':
+            sample_params["top_k"] = -1
             if self.model is None:
                 from inference.local.mistral import get_model as get_mistral_model
                 self.model = get_mistral_model('large-instruct-2407')
-            res = self.model.inference(messages)
+            res = self.model.inference(messages, **sample_params)
         else:
             raise ValueError(f"Unsupported model: {self.model_type}")
             
@@ -104,8 +115,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=['gpt-4o', 'deepseek-reasoner', 'glm-4-9b', 'mistral-large-instruct-2407'], default='gpt-4o', help='Model type to use for prediction')
     parser.add_argument('--data_path', type=str, default='data/MMLongBench_Write.xlsx', help='Path to the data file')
-    parser.add_argument('--output_path', type=str, default='data/MMLongBench_Write_Caption_LLM.xlsx', help='Path to the output file')
+    parser.add_argument('--output_path', type=str, default='data/eval_res/custom/caption_llm/model.xlsx', help='Path to the output file')
     args = parser.parse_args()
+
+    if args.output_path == 'data/eval_res/custom/caption_llm/model.xlsx':
+        args.output_path = args.output_path.replace('model.xlsx', f'{args.model}.xlsx')
 
     evaluator = CaptionLLMEvaluator(
         data_path=args.data_path,
@@ -114,7 +128,6 @@ def main():
     )
     evaluator.run()
 
-    print_res_head()
     print_res({args.model: args.output_path})
 
 if __name__ == "__main__":
