@@ -90,7 +90,7 @@ Please provide a comprehensive response that fully satisfies the writing require
         messages = [{"role": "user", "content": prompt}]        
         if self.model_type == 'gpt-4o':
             sample_params.pop('top_k')
-            res = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, use_cache=False, **sample_params)
+            res = GPT_Interface.call(model="gpt-4o-2024-08-06", messages=messages, use_cache=False, **sample_params)
         elif self.model_type == 'deepseek-reasoner':
             sample_params.pop('top_k')
             res = DeepSeek_Interface.call(model='Pro/deepseek-ai/DeepSeek-R1', messages=messages, use_cache=False, **sample_params)

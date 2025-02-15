@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from utils import count_words, extract_json, encode_image_to_base64
+from utils import count_words, extract_json, encode_image_to_base64, parallel_process
 from inference.api.gpt import GPT_Interface
 from tqdm import tqdm
 from abc import ABC, abstractmethod
@@ -99,7 +99,7 @@ Please evaluate the quality of the response. You must first provide a brief anal
         use_cache = True
         for i in range(retry):
             try:
-                res = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, use_cache=use_cache, temperature=0.8)
+                res = GPT_Interface.call(model="gpt-4o-2024-08-06", messages=messages, use_cache=use_cache, temperature=0.5, max_tokens=1024)
                 print(res)
                 res_json = extract_json(res)
                 for d in dims:
@@ -109,8 +109,12 @@ Please evaluate the quality of the response. You must first provide a brief anal
                         raise ValueError(f"Invalid score for dimension {d}: {res_json[d]}")
                 return res_json
             except Exception as e:
+                if "GPT refused to answer" in str(e):
+                    print(f"GPT refused to answer for index {idx}, skipping evaluation")
+                    return None
                 print(f"GPT API call failed due to {e}, retrying... ({i+1}/{retry})")
                 if i == retry - 1:  # Last retry
+                    print(f"All retries failed for index {idx}")
                     raise e
                 use_cache = False
                 continue
@@ -120,6 +124,22 @@ Please evaluate the quality of the response. You must first provide a brief anal
         length = count_words(row['prediction'])
         l_score = length_score(length, row['L'])
         quality_res = self.evaluate_quality(idx, row)
+        
+        # Handle case where quality evaluation was skipped
+        if quality_res is None:
+            return {
+                'length': length,
+                'length_score': l_score,
+                'quality_scores': 'GPT_REFUSED',  # Changed to string marker
+                'relevance': None,
+                'accuracy': None,
+                'coherence': None,
+                'clarity': None,
+                'breadth_depth': None,
+                'reading_experience': None,
+                'overall_quality_score': None
+            }
+        
         overall_quality_score = 0
         for d in dims:
             overall_quality_score += quality_res[d]
@@ -140,7 +160,7 @@ Please evaluate the quality of the response. You must first provide a brief anal
         }
     
     def run(self):
-        """Run the complete evaluation pipeline"""
+        """Run the complete evaluation pipeline with parallel processing"""
         # First pass: Generate predictions
         for idx, row in tqdm(self.data.iterrows(), total=len(self.data)):
             if row['prediction'] is not None and not pd.isna(row['prediction']):
@@ -153,26 +173,94 @@ Please evaluate the quality of the response. You must first provide a brief anal
             
         self.data.to_excel(self.output_path, index=False)
         
-        # Second pass: Evaluate predictions
-        for idx, row in tqdm(self.data.iterrows(), total=len(self.data)):
+        # Second pass: Evaluate predictions in parallel
+        evaluation_batch = []
+        for idx, row in self.data.iterrows():
             if row['quality_scores'] is not None and not pd.isna(row['quality_scores']):
                 continue
+            evaluation_batch.append((idx, row))
+        
+        if evaluation_batch:
+            # Process evaluations in parallel
+            batch_results = parallel_process(
+                self.evaluate_single,
+                evaluation_batch,
+                num_processes=5
+            )
             
-            res = self.evaluate_single(idx, row)
-            for col, value in res.items():
-                if col != 'quality_scores':
-                    self.data.loc[idx, col] = float(value)
-                else:
-                    self.data.loc[idx, col] = str(value)
-            self.data.to_excel(self.output_path, index=False)
+            # Update results one by one
+            for (idx, _), res in zip(evaluation_batch, batch_results):
+                if res:
+                    for col, value in res.items():
+                        if col == 'quality_scores':
+                            self.data.loc[idx, col] = str(value)
+                        else:
+                            # Handle None values for numeric columns
+                            if value is None:
+                                self.data.loc[idx, col] = pd.NA
+                            else:
+                                self.data.loc[idx, col] = float(value)
         
         self.data.to_excel(self.output_path, index=False)
         return self.data
-    
+
+ 
+
     def __del__(self):
         """Cleanup when the object is destroyed"""
         if self.model is not None:
             del self.model
+
+def print_task_res(model_res):
+    format = """\\texttt{{{model}}} & {Sl:.1f} & {Sq:.1f} & {Sl_0:.1f} & {Sq_0:.1f} & {Sl_1:.1f} & {Sq_1:.1f} & {Sl_2:.1f} & {Sq_2:.1f} & {Sl_3:.1f} & {Sq_3:.1f} & {Sl_4:.1f} & {Sq_4:.1f} & {Sl_5:.1f} & {Sq_5:.1f} \\\\"""
+    for m in model_res:
+        df = pd.read_excel(model_res[m])
+        Sl_sum = 0
+        Sq_sum = 0
+        total_count = 0
+        Sl_group = [0] * 6
+        Sq_group = [0] * 6
+        cnt_group = [0] * 6
+               
+        # Filter out rows where GPT refused to answer
+        df = df[df['quality_scores'] != 'GPT_REFUSED']
+        
+        # Process data in groups of 20 lines
+        for idx, row in df.iterrows():
+            task_idx = idx // 20  # Integer division to get task index
+            if task_idx >= 6:  # Skip if beyond 6 tasks
+                continue
+                
+            Sl = row['length_score']
+            Sq = row['overall_quality_score']
+            
+            Sl_sum += Sl
+            Sq_sum += Sq
+            total_count += 1
+            
+            Sl_group[task_idx] += Sl
+            Sq_group[task_idx] += Sq
+            cnt_group[task_idx] += 1
+        
+        # Calculate averages for each task
+        for i in range(6):
+            if cnt_group[i] > 0:
+                Sl_group[i] /= cnt_group[i]
+                Sq_group[i] /= cnt_group[i]
+        
+        # Calculate overall averages using total sum
+        Sl_all = Sl_sum / total_count if total_count > 0 else 0
+        Sq_all = Sq_sum / total_count if total_count > 0 else 0
+        
+        # Combine the dictionaries before passing to format
+        format_dict = {
+            "model": m,
+            "Sl": Sl_all,
+            "Sq": Sq_all
+        }
+        format_dict.update({f"Sl_{i}": Sl_group[i] for i in range(6)})
+        format_dict.update({f"Sq_{i}": Sq_group[i] for i in range(6)})
+        print(format.format(**format_dict))
 
 def print_res_head():
     print("\\begin{table}[h]")
@@ -189,6 +277,10 @@ def print_res(model_res):
         Sl_group = [0, 0, 0, 0]
         Sq_group = [0, 0, 0, 0]
         cnt_group = [0, 0, 0, 0]
+        
+        # Filter out rows where GPT refused to answer
+        df = df[df['quality_scores'] != 'GPT_REFUSED']
+        
         for idx, row in df.iterrows():
             Sl = row['length_score']
             Sq = row['overall_quality_score']
@@ -210,6 +302,11 @@ def print_res(model_res):
                 Sq_group[3] += Sq
                 cnt_group[3] += 1
         
+        # Check if we have any valid data points
+        if sum(cnt_group) == 0:
+            print(f"Warning: No valid evaluations for model {m}")
+            continue
+            
         Sl_all = sum(Sl_group) / sum(cnt_group)
         Sq_all = sum(Sq_group) / sum(cnt_group)
         S = (Sl_all + Sq_all) / 2
@@ -221,8 +318,11 @@ def print_res(model_res):
             "Sl": Sl_all,
             "Sq": Sq_all
         }
-        format_dict.update({f"Sl_{i}": Sl_group[i] / cnt_group[i] for i in range(4)})
-        format_dict.update({f"Sq_{i}": Sq_group[i] / cnt_group[i] for i in range(4)})
+        # Handle potential division by zero for each group
+        for i in range(4):
+            format_dict[f"Sl_{i}"] = Sl_group[i] / cnt_group[i] if cnt_group[i] > 0 else 0
+            format_dict[f"Sq_{i}"] = Sq_group[i] / cnt_group[i] if cnt_group[i] > 0 else 0
+            
         print(format.format(**format_dict))
 
 
@@ -234,30 +334,3 @@ def length_score(x, y):
         return 100 * max(0, 1. - (y / x - 1) / 3)
     else:
         return 100 * max(0, 1. - (x / y - 1) / 2) 
-
-
-if __name__ == "__main__":
-    caption_llm = {
-        "GLM-4-9B-Chat": "data/MMLongBench_Write_Caption_LLM_glm-4-9b.xlsx",
-        "GPT-4o-2024-05-13": "data/MMLongBench_Write_Caption_LLM_gpt-4o.xlsx",
-        "Mistral-Large-Instruct-2407": "data/MMLongBench_Write_Caption_LLM_mistral-large-instruct-2407.xlsx"
-    }
-    model_res = {
-        "Qwen2-VL-7B": "data/MMLongBench_Write_VLM_Qwen2-VL-7B.xlsx",
-        "Qwen2-VL-72B": "data/MMLongBench_Write_VLM_Qwen2-VL-72B.xlsx",
-        "MiniCPM-V2.6": "data/MMLongBench_Write_VLM_MiniCPM-V-2_6.xlsx",
-        "gpt-4-1106-vision-preview": "data/MMLongBench_Write_VLM_gpt-4-1106-vision-preview.xlsx",
-        "gpt-4o-2024-05-13": "data/MMLongBench_Write_VLM_gpt-4o.xlsx",
-        "claude-3-opus-20240229": "data/MMLongBench_Write_VLM_claude-3-opus-20240229.xlsx",
-        "LongWriter-V-7B": "data/MMLongBench_Write_VLM_LongWriter-V-7B.xlsx",
-        "LongWriter-V-72B": "data/MMLongBench_Write_VLM_LongWriter-V-72B.xlsx",
-        "LongWriter-V-7B-DPO": "data/MMLongBench_Write_VLM_LongWriter-V-7B-DPO-Lec.xlsx",
-        "Qwen2.5-VL-7B": "data/MMLongBench_Write_VLM_qwen2.5-vl-7b.xlsx",
-        "Qwen2.5-VL-72B": "data/MMLongBench_Write_VLM_qwen2.5-vl-72b.xlsx",
-    }
-    ablation_res = {
-        'Without Multi-Image': "data/MMLongBench_Write_VLM_ablation-single_image.xlsx",
-        'Without Single-Image': "data/MMLongBench_Write_VLM_ablation-multi_image.xlsx",
-    }
-    print_res_head()
-    print_res(ablation_res)

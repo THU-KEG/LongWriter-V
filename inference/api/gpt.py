@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 from pymongo import MongoClient
@@ -78,11 +77,12 @@ class GPT_Interface:
                 return cached_result
             
         retries = 3
-        delay = 1.0
+        delay = 120.0
         for attempt in range(retries):
             try:
                 response = cls.client.chat.completions.create(model=model, messages=messages, **kwargs)
-
+                if response.choices[0].message.refusal:
+                    raise Exception("GPT refused to answer: " + response.choices[0].message.refusal)
                 result = response.choices[0].message.content
                 
                 if use_cache:
@@ -90,12 +90,12 @@ class GPT_Interface:
                 return result
                 
             except Exception as e:
-                if attempt < retries - 1:
+                if attempt == retries - 1 or "GPT refused to answer" in str(e):
+                    print(f"{model} API call failed: {str(e)}")
+                    raise e
+                else:
                     print(f"Attempt {attempt + 1} failed, caused by {str(e)}, retrying in {delay} seconds...")
                     time.sleep(delay)
-                else:
-                    print(f"{model} API call failed after {retries} attempts: {str(e)}")
-                    raise e
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -113,11 +113,9 @@ class VllmServer_Interface(GPT_Interface):
         api_key=config["vllm_api_key"],
         base_url=config.get("vllm_base_url")
     )
-        
 
-if __name__ == "__main__":
-    # GPT_Interface.clear_cache()
-    messages = [
-        {"role": "user", "content": "在一个python项目中，有没有什么优雅的方式可以在任意文件中获取当前项目的根目录地址"}
-    ]
-    print(VllmServer_Interface.call(model="/model/trained/qwen/qwen2_vl-72b/inst_and_part_scripts_sample_10k_back_translated_5k", messages=messages, use_cache=False))
+class Gemini_Interface(GPT_Interface):
+    client = OpenAI(
+        api_key=config["gemini_api_key"],
+        base_url=config.get("gemini_base_url")
+    )
