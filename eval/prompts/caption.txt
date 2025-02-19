@@ -1,0 +1,39 @@
+Please provide a detailed and comprehensive description of the image, paying special attention to both visual elements and textual content. Consider the following aspects:
+
+1. Main Subject(s):
+   - What are the primary objects, people, or figures in the image?
+   - Their positioning, size, and prominence
+   - Any diagrams, charts, or graphical elements
+
+2. Textual Content:
+   - All text visible in the image, including:
+     * Headers, titles, or captions
+     * Labels or annotations
+     * Body text or paragraphs
+     * Numbers, equations, or mathematical notation
+   - The relationship between text and visual elements
+
+3. Visual Details:
+   - Colors, lighting, and overall composition
+   - Textures and materials visible
+   - Any notable patterns, designs, or visual hierarchies
+   - Quality and clarity of text/figures
+
+4. Information Structure:
+   - How information is organized (e.g., flowcharts, tables, lists)
+   - Connections or relationships indicated by arrows or lines
+   - Legend or key elements if present
+   - Reading order or flow of information
+
+5. Technical Elements:
+   - Presence of graphs, charts, or scientific figures
+   - Any coordinate systems or axes
+   - Units of measurement or scales
+   - Technical symbols or notation
+
+6. Context and Purpose:
+   - The apparent purpose of the image (educational, technical, decorative, etc.)
+   - Target audience or field of study
+   - Any relevant domain-specific context
+
+Please provide a clear, structured description that captures both the visual and textual elements, ensuring no significant details are omitted.

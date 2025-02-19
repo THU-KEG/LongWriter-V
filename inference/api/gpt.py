@@ -36,11 +36,16 @@ class MongoCache:
     def clear(self):
         self.collection.delete_many({})
 
-cache = MongoCache(
-    host=config["mongo_cache_host"],
-    port=config["mongo_cache_port"],
-    db_name=config["mongo_cache_db"]
-)
+# Initialize cache with error handling
+try:
+    cache = MongoCache(
+        host=config["mongo_cache_host"],
+        port=config["mongo_cache_port"],
+        db_name=config["mongo_cache_db"]
+    )
+except Exception as e:
+    print(f"Warning: MongoDB cache initialization failed: {str(e)}")
+    cache = None
 
 class GPT_Interface:
     client = OpenAI(
@@ -69,9 +74,12 @@ class GPT_Interface:
         Common helper method for GPT API calls with caching and retry logic
         Returns: Tuple of (response_content, prompt_tokens, completion_tokens)
         """
-        cache_key = cls._generate_cache_key(model, messages, **kwargs)
-        
+        # Skip cache if MongoDB is not available
+        if cache is None:
+            use_cache = False
+            
         if use_cache:
+            cache_key = cls._generate_cache_key(model, messages, **kwargs)
             cached_result = cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
@@ -85,7 +93,8 @@ class GPT_Interface:
                     raise Exception("GPT refused to answer: " + response.choices[0].message.refusal)
                 result = response.choices[0].message.content
                 
-                if use_cache:
+                if use_cache and cache is not None:
+                    cache_key = cls._generate_cache_key(model, messages, **kwargs)
                     cache[cache_key] = result
                 return result
                 
@@ -100,7 +109,8 @@ class GPT_Interface:
     @classmethod
     def clear_cache(cls) -> None:
         """Clear all cached responses"""
-        cache.clear()
+        if cache is not None:
+            cache.clear()
 
 class DeepSeek_Interface(GPT_Interface):
     client = OpenAI(

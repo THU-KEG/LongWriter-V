@@ -1,0 +1,13 @@
+Please analyze the following image captions and writing requirement carefully, then provide a detailed response that:
+        1. Directly addresses the writing requirement
+        2. Incorporates relevant details from the image captions
+        3. Uses clear, well-structured writing
+        4. Maintains appropriate tone and style for the context
+
+Writing requirement:
+$QUESTION$
+
+Image captions:
+$CAPTIONS$
+
+Please provide a comprehensive response that fully satisfies the writing requirement while effectively utilizing the information from the image captions.

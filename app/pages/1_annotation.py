@@ -58,7 +58,7 @@ class AnnotationPlatform:
         init_auth()
         
         # Initialize data manager with correct path
-        self.data_manager = DataManager(data_dir="/mnt/wyc/code/LongWriter-V/data/dpo")
+        self.data_manager = DataManager(data_dir=".")
         
         # Initialize session state
         if 'page' not in st.session_state:

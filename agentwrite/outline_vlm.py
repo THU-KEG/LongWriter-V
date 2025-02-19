@@ -5,49 +5,9 @@ import re
 
 def instruction_outline(instruction, img_paths):
 
-    prompt_plan = """You are an expert planner. Your task is to break down a writing task into clear subtasks based on the provided images and writing instruction.
+    prompt_plan = open('prompts/plan.txt', 'r').read()
 
-Please analyze the images and writing instruction carefully, then create a detailed outline in this format:
-
-Section 1 - Main Point: [Key points to cover based on images and instruction] - Word Count: [200-1000 words]
-Section 2 - Main Point: [Key points to cover based on images and instruction] - Word Count: [200-1000 words]
-...
-
-Make each section focused and specific while ensuring the full outline:
-1. Covers all key content from both images and writing instruction
-2. Flows logically from section to section
-3. Has reasonable word count targets (200-1000 words per section)
-4. Forms a cohesive whole that fulfills the writing instruction
-
-Writing instruction:
-$INST$
-
-Output only the outline with no other text."""
-
-    prompt_write = """You are an expert writer. Your task is to write the next section of a longer piece based on:
-
-1. The provided images and writing instruction
-2. The outline plan
-3. Previously written sections
-
-Writing instruction:
-$INST$
-
-Outline plan:
-$PLAN$
-
-Previous sections:
-$TEXT$
-
-Please write section $STEP$ following these guidelines:
-1. Focus on the main points specified in the outline
-2. Stay within the target word count
-3. Flow naturally from previous sections
-4. Integrate relevant details from the images
-5. Maintain a consistent tone and style
-6. Write only this section, not a full conclusion
-
-Output only the new section with no other text."""
+    prompt_write = open('prompts/write.txt', 'r').read()
 
     imgs = [encode_image_to_base64(img) for img in img_paths]
 

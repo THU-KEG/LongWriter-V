@@ -8,7 +8,7 @@ from io import BytesIO
 from .utils import logger
 
 class DataManager:
-    def __init__(self, data_dir: str = "/mnt/wyc/code/LongWriter-V/data/dpo"):
+    def __init__(self, data_dir: str = "."):
         """初始化数据管理器
         Args:
             data_dir: 数据目录的路径，默认为项目的data/dpo目录

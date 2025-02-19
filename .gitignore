@@ -173,8 +173,6 @@ __pycache__
 
 .cache
 
-config.json
-
 outputs/*
 environments
 logs

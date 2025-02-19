@@ -22,7 +22,7 @@ def init_session_state():
 
 def get_course_slides(major: str, course_name: str) -> list:
     """获取某个课程的所有幻灯片"""
-    png_dir = Path("/mnt/wyc/code/LongWriter-V/data/dpo") / major / course_name / "pngs"
+    png_dir = Path(".") / major / course_name / "pngs"
     if not png_dir.exists():
         return []
     
@@ -36,7 +36,7 @@ def get_course_slides(major: str, course_name: str) -> list:
 
 def get_courses_for_major(major: str) -> list:
     """获取某个专业下的所有课程"""
-    base_path = Path("/mnt/wyc/code/LongWriter-V/data/dpo") / major
+    base_path = Path(".") / major
     if not base_path.exists():
         return []
     
