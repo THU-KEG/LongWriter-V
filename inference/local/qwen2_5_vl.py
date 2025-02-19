@@ -1,10 +1,10 @@
 import torch
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-from inference.local.base import BaseModel
+from inference.local.qwen2_vl import Qwen2VL
 from qwen_vl_utils import process_vision_info
 import json
 
-class Qwen2_5_VL(BaseModel):
+class Qwen2_5_VL(Qwen2VL):
     def __init__(self, model_path: str, **kwargs):
         super().__init__(model_path)
         self.load_kwargs = kwargs
@@ -65,8 +65,3 @@ def get_model(type):
     model_paths = config["model_paths"]["qwen2_5_vl"]
     return Qwen2_5_VL(model_paths[type])
 
-
-if __name__ == "__main__":
-    msgs = [{"role": "user", "content": "你好，你是谁？"}]
-    model = get_model("7b")
-    print(model.inference(msgs))

@@ -115,10 +115,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=['gpt-4o', 'deepseek-reasoner', 'glm-4-9b', 'mistral-large-instruct-2407'], default='gpt-4o', help='Model type to use for prediction')
     parser.add_argument('--data_path', type=str, default='data/MMLongBench_Write.xlsx', help='Path to the data file')
-    parser.add_argument('--output_path', type=str, default='data/eval_res/custom/caption_llm/model.xlsx', help='Path to the output file')
+    parser.add_argument('--output_path', type=str, default='data/eval_res/MMLongBench_Write/caption_llm/model.xlsx', help='Path to the output file')
     args = parser.parse_args()
 
-    if args.output_path == 'data/eval_res/custom/caption_llm/model.xlsx':
+    if args.output_path == 'data/eval_res/MMLongBench_Write/caption_llm/model.xlsx':
         args.output_path = args.output_path.replace('model.xlsx', f'{args.model}.xlsx')
 
     evaluator = CaptionLLMEvaluator(

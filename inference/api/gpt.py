@@ -77,7 +77,7 @@ class GPT_Interface:
                 return cached_result
             
         retries = 3
-        delay = 120.0
+        delay = 1.0
         for attempt in range(retries):
             try:
                 response = cls.client.chat.completions.create(model=model, messages=messages, **kwargs)

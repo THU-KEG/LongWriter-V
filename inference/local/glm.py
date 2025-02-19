@@ -13,7 +13,7 @@ class GLM4(BaseModel):
         if self.model is None or self.processor is None:
             self.model = LLM(
                 model=self.model_path,
-                tensor_parallel_size=self.load_kwargs.get("tensor_parallel_size", 8),
+                tensor_parallel_size=self.load_kwargs.get("tensor_parallel_size", 4),
                 trust_remote_code=True
             )
             self.processor = AutoProcessor.from_pretrained(self.model_path, trust_remote_code=True)
@@ -23,7 +23,7 @@ class GLM4(BaseModel):
             
     def inference_vllm(self, msgs, **kwargs):
         self._load()
-        
+
         stop_token_ids = [151329, 151336, 151338]
         sampling_params = SamplingParams(
             **kwargs,
@@ -41,9 +41,3 @@ def get_model(type):
         config = json.load(f)
     model_paths = config["model_paths"]["glm4"]
     return GLM4(model_paths[type])
-
-
-if __name__ == "__main__":
-    msgs = [{"role": "user", "content": "你好，你是谁？"}]
-    model = get_model("9b-chat")
-    print(model.inference_vllm(msgs, max_tokens=8192, temperature=0.9, top_p=0.9, n=5))

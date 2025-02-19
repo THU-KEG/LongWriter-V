@@ -36,7 +36,7 @@ class Qwen2VL(BaseModel):
             self.model = LLM(
                 model=self.model_path, 
                 trust_remote_code=True, 
-                tensor_parallel_size=self.load_kwargs.get("tensor_parallel_size", 8),
+                tensor_parallel_size=self.load_kwargs.get("tensor_parallel_size", 4),
                 limit_mm_per_prompt={"image":26}
             )
             self.processor = AutoProcessor.from_pretrained(
@@ -171,12 +171,3 @@ def get_model(type, **kwargs):
         config = json.load(f)
     model_paths = config["model_paths"]["qwen2_vl"]
     return Qwen2VL(model_paths[type], **kwargs)
-
-
-if __name__ == "__main__":
-    msgs = [{"role": "user", "content": [{"type": "text", "text": "What is depicted in the image?"}, {"type": "image", "image": "buffer/1.1 自主学习原理/images/1.png"}]}]
-    model = get_model("longwriter-v")
-    print(model.inference(msgs))
-    del model
-    model = get_model("72b")
-    print(model.inference_vllm(msgs, max_tokens=8192, temperature=0.9, top_p=0.9, n=5))

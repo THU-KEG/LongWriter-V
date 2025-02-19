@@ -14,7 +14,7 @@ class VLMEvaluator(BaseEvaluator):
     def __init__(self, data_path, output_path, model_type='qwen2-vl-7b'):
         super().__init__(data_path, output_path)
         self.model_type = model_type
-    
+
     def predict(self, idx, row):
         """Generate prediction using VLM model"""
         image_path = get_image_path(idx, row)
@@ -76,10 +76,6 @@ class VLMEvaluator(BaseEvaluator):
             if self.model is None:
                 self.model = get_qwen2_5_vl_model('longwriter-v-7b')
             res = self.model.inference_vllm(messages, **sample_params)[0]
-        elif self.model_type == 'longwriter-v-7b-dpo':
-            if self.model is None:
-                self.model = get_qwen2_5_vl_model('longwriter-v-7b-dpo')
-            res = self.model.inference_vllm(messages, **sample_params)[0]
         elif self.model_type == 'minicpm-v2.6':
             if self.model is None:
                 self.model = get_minicpm_model('base')
@@ -106,10 +102,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='qwen2-vl-7b', help='Model type to use for prediction')
     parser.add_argument('--data_path', type=str, default='data/MMLongBench_Write.xlsx', help='Path to the data file')
-    parser.add_argument('--output_path', type=str, default='data/eval_res/custom/vlm/model.xlsx', help='Path to the output file')
+    parser.add_argument('--output_path', type=str, default='data/eval_res/MMLongBench_Write/vlm/model.xlsx', help='Path to the output file')
     args = parser.parse_args()
     
-    if args.output_path == 'data/eval_res/custom/vlm/model.xlsx':
+    if args.output_path == 'data/eval_res/MMLongBench_Write/vlm/model.xlsx':
         args.output_path = args.output_path.replace('model.xlsx', f'{args.model}.xlsx')
 
     evaluator = VLMEvaluator(
