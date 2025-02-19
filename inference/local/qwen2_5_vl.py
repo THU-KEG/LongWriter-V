@@ -2,7 +2,7 @@ import torch
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from inference.local.qwen2_vl import Qwen2VL
 from qwen_vl_utils import process_vision_info
-import json
+from config import config
 
 class Qwen2_5_VL(Qwen2VL):
     def __init__(self, model_path: str, **kwargs):
@@ -60,8 +60,6 @@ class Qwen2_5_VL(Qwen2VL):
 
 
 def get_model(type):
-    with open("config.json", "r") as f:
-        config = json.load(f)
-    model_paths = config["model_paths"]["qwen2_5_vl"]
+    model_paths = config.model_paths["qwen2_5_vl"]
     return Qwen2_5_VL(model_paths[type])
 

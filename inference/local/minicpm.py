@@ -1,7 +1,7 @@
-import json
 from inference.local.base import BaseModel
 from transformers import AutoModel, AutoTokenizer
 import torch
+from config import config
 
 class MiniCPM(BaseModel):
     def __init__(self, model_path: str, **kwargs):
@@ -26,7 +26,5 @@ class MiniCPM(BaseModel):
         )
 
 def get_model(type, **kwargs):
-    with open("config.json", "r") as f:
-        config = json.load(f)
-    model_paths = config["model_paths"]["minicpm"]
+    model_paths = config.model_paths["minicpm"]
     return MiniCPM(model_paths[type], **kwargs)

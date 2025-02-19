@@ -23,7 +23,7 @@ We open-source three models: [LongWriter-V-7B](https://huggingface.co/THU-KEG/Lo
 <a name="agentwrite"></a>
 ## 🤖️ AgentWrite
 
-We are also open-sourcing AgentWrite under `agentwrite/`, our automated ultra-long output data construction pipeline. Run `plan.py` and then `write.py` to obtain the final data. Please configure your API key in `config.json`.
+We are also open-sourcing AgentWrite under `agentwrite/`, our automated ultra-long output data construction pipeline. Run `plan.py` and then `write.py` to obtain the final data. Please configure your API key in `config.py`.
 
 <a name="longwriter-v-training"></a>
 ## 🖥️ Model Training
@@ -39,7 +39,7 @@ We provide our evaluation data and code under `eval/`. Run
 ```bash
 python -m eval.{mmlongbench_write, longwrite_v_ruler} --model {model_name} --method {vlm, caption_llm}
 ```
-to get evaluation resuts. Remember to configure your OpenAI API key in `config.json` since we adopt GPT-4o as the judge.
+to get evaluation resuts. Remember to configure your OpenAI API key in `config.py` since we adopt GPT-4o as the judge.
 
 Here are the evaluation results on **MMLongBench-Write**:
 Here are the evaluation results on **LongWrite-V-Ruler**:

@@ -5,8 +5,7 @@ from pymongo import MongoClient
 import time
 import hashlib
 
-config_path = "config.json"
-config = json.load(open(config_path))
+from config import config
 
 class MongoCache:
     """MongoDB-based cache implementation"""
@@ -39,9 +38,9 @@ class MongoCache:
 # Initialize cache with error handling
 try:
     cache = MongoCache(
-        host=config["mongo_cache_host"],
-        port=config["mongo_cache_port"],
-        db_name=config["mongo_cache_db"]
+        host=config.mongo_cache_host,
+        port=config.mongo_cache_port,
+        db_name=config.mongo_cache_db
     )
 except Exception as e:
     print(f"Warning: MongoDB cache initialization failed: {str(e)}")
@@ -49,8 +48,8 @@ except Exception as e:
 
 class GPT_Interface:
     client = OpenAI(
-        api_key=config["openai_api_key"],
-        base_url=config.get("openai_base_url")
+        api_key=config.openai_api_key,
+        base_url=config.openai_base_url
     )
 
     @staticmethod
@@ -114,18 +113,18 @@ class GPT_Interface:
 
 class DeepSeek_Interface(GPT_Interface):
     client = OpenAI(
-        api_key=config["deepseek_api_key"],
-        base_url=config.get("deepseek_base_url")
+        api_key=config.deepseek_api_key,
+        base_url=config.deepseek_base_url
     )
 
 class VllmServer_Interface(GPT_Interface):
     client = OpenAI(
-        api_key=config["vllm_api_key"],
-        base_url=config.get("vllm_base_url")
+        api_key=config.vllm_api_key,
+        base_url=config.vllm_base_url
     )
 
 class Gemini_Interface(GPT_Interface):
     client = OpenAI(
-        api_key=config["gemini_api_key"],
-        base_url=config.get("gemini_base_url")
+        api_key=config.gemini_api_key,
+        base_url=config.gemini_base_url
     )

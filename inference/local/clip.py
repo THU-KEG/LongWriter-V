@@ -7,19 +7,12 @@ from io import BytesIO
 from PIL import Image
 import numpy as np
 import uvicorn
-import logging
-import json
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("CLIPService")
+from config import config
 
 # FastAPI app
 app = FastAPI()
 
-# Load CLIP model and processor
-with open("config.json", "r") as f:
-    config = json.load(f)
-MODEL_PATH = config["model_paths"]["clip"]["base"]
+MODEL_PATH = config.model_paths["clip"]["base"]
 
 model = CLIPModel.from_pretrained(MODEL_PATH)
 processor = CLIPProcessor.from_pretrained(MODEL_PATH)

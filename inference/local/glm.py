@@ -2,7 +2,7 @@ import torch
 from transformers import AutoProcessor
 from vllm import LLM, SamplingParams
 from inference.local.base import BaseModel
-import json
+from config import config
 
 class GLM4(BaseModel):
     def __init__(self, model_path: str, **kwargs):
@@ -37,7 +37,5 @@ class GLM4(BaseModel):
 
 
 def get_model(type):
-    with open("config.json", "r") as f:
-        config = json.load(f)
-    model_paths = config["model_paths"]["glm4"]
+    model_paths = config.model_paths["glm4"]
     return GLM4(model_paths[type])

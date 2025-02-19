@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from inference.local.base import BaseModel
-import json
+from config import config
 
 class Reranker(BaseModel):
     def __init__(self, model_path: str):
@@ -21,7 +21,5 @@ class Reranker(BaseModel):
         return scores.tolist()
     
 def get_model(type):
-    with open("config.json", "r") as f:
-        config = json.load(f)
-    model_paths = config["model_paths"]["reranker"]
+    model_paths = config.model_paths["reranker"]
     return Reranker(model_paths["base"])

@@ -8,7 +8,7 @@ from transformers import (
 )
 from qwen_vl_utils import process_vision_info
 from vllm import LLM, SamplingParams
-import json
+from config import config
 
 
 class Qwen2VL(BaseModel):
@@ -167,7 +167,5 @@ class Qwen2VL(BaseModel):
 
 
 def get_model(type, **kwargs):
-    with open("config.json", "r") as f:
-        config = json.load(f)
-    model_paths = config["model_paths"]["qwen2_vl"]
+    model_paths = config.model_paths["qwen2_vl"]
     return Qwen2VL(model_paths[type], **kwargs)

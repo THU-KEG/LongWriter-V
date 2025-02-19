@@ -1,12 +1,12 @@
 import json
 from anthropic import Anthropic
+from config import config
 
 class Claude_Interface:
-    with open("config.json", "r") as f:
-        config = json.load(f)
+
     client = Anthropic(
-        api_key=config["claude_api_key"],
-        base_url=config["claude_base_url"]
+        api_key=config.claude_api_key,
+        base_url=config.claude_base_url
     )
 
     @classmethod
