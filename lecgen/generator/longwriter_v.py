@@ -53,6 +53,9 @@ IMPORTANT:
     return res_json
 
 def longwriter_v(imgs):
+    import time
+    start_time = time.time()
+
     # Split images into chunks of max 26 images
     chunks = []
     chunk = []
@@ -97,20 +100,18 @@ REQUIREMENTS:
             ] + [dict(type="image_url", image_url=dict(url=img)) for img in chunk])
         ]
 
-        # Try generating scripts with retries
-        # model = get_qwen2_vl_model('longwriter-v-dpo')
-
         max_retry = 3
         
         for retry in range(max_retry):
             try:
-                # res = model.inference_vllm(messages)
-                res = VllmServer_Interface.call(model="/home/test/test09/wyuc/model/trained/qwen/qwen2_vl-7b/inst_and_part_scripts_sample_10k_back_translated_5k/", messages=messages, use_cache=False)
+                res = VllmServer_Interface.call(model="/home/test/test09/wyuc/model/trained/qwen/qwen2.5_vl-7b/dpo/mixed-1", messages=messages, max_tokens=8192, temperature=0.7, use_cache=False)
 
                 print(res)    
 
                 res_json = extract_json(res)
                 
+                if len(chunk) != len(res_json):
+                    raise Exception(f"Failed to generate {len(chunk)} scripts")
                 for i in range(1, len(chunk) + 1):
                     if str(i) not in res_json:
                         raise Exception(f"Missing script for slide {i}")
@@ -125,6 +126,9 @@ REQUIREMENTS:
 
         for key, value in res_json.items():
             scripts.append(value)
+
+    total_time = time.time() - start_time
+    print(f"Total time cost: {total_time:.2f} seconds")
 
     return scripts
 

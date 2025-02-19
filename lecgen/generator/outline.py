@@ -195,7 +195,7 @@ Output only the JSON."""
     
     for attempt in range(max_try):
         try:
-            response = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, max_tokens=8192, use_cache=use_cache)
+            response = GPT_Interface.call(model="gpt-4o-2024-05-13", messages=messages, max_tokens=4096, use_cache=use_cache)
             print(response)
             use_cache = False
             improved_scripts = extract_json(response)

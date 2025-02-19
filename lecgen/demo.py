@@ -426,6 +426,7 @@ class ScriptViewer:
                     st.session_state.scripts[script_key] = script
                     st.session_state.modified_scripts.add(script_key)
             st.session_state.should_generate = False
+            st.rerun()
         
         self.render_content()
         
@@ -448,6 +449,14 @@ class ScriptViewer:
             # Only process the file if it hasn't been processed before
             file_identifier = f"{uploaded_file.name}_{uploaded_file.size}"
             if file_identifier not in st.session_state.processed_files:
+                # Clear existing scripts and related states when processing a new file
+                st.session_state.scripts = {}
+                st.session_state.modified_scripts = set()
+                st.session_state.polish_preview = {}
+                st.session_state.pending_polish = set()
+                st.session_state.user_edited_scripts = {}
+                st.session_state.original_scripts = {}
+                
                 st.session_state.current_images = self.process_uploaded_file(uploaded_file)
                 st.session_state.processed_files.add(file_identifier)
             
@@ -461,73 +470,75 @@ class ScriptViewer:
                 st.session_state.should_generate = True
                 st.rerun()
             
-            output = io.BytesIO()
-            try:
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    # Create DataFrame for Excel
-                    data = []
-                    for i, img_base64 in enumerate(st.session_state.current_images):
-                        script_key = f"script_{i}_0"
-                        script_content = st.session_state.scripts.get(script_key, "")
-                        data.append({
-                            "Script": script_content
-                        })
+            # Only show export button if scripts exist
+            if any(st.session_state.scripts.values()):
+                output = io.BytesIO()
+                try:
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        # Create DataFrame for Excel
+                        data = []
+                        for i, img_base64 in enumerate(st.session_state.current_images):
+                            script_key = f"script_{i}_0"
+                            script_content = st.session_state.scripts.get(script_key, "")
+                            data.append({
+                                "Script": script_content
+                            })
+                        
+                        df = pd.DataFrame(data)
+                        df.to_excel(writer, index=False, sheet_name='Lecture Script')
+                        worksheet = writer.sheets['Lecture Script']
+                        
+                        # Insert a column for images
+                        worksheet.insert_cols(0)
+                        worksheet.column_dimensions['A'].width = 80  # Image column
+                        worksheet.column_dimensions['B'].width = 100  # Script column
+                        
+                        # Add column headers
+                        worksheet['A1'] = 'Slide'
+                        
+                        # Add images to the first column
+                        for i, img_base64 in enumerate(st.session_state.current_images, start=2):
+                            try:
+                                # Extract the actual base64 data from the data URL
+                                if ';base64,' in img_base64:
+                                    img_base64 = img_base64.split(';base64,')[1]
+                                
+                                # Decode base64 image
+                                image_bytes = base64.b64decode(img_base64)
+                                image = Image.open(BytesIO(image_bytes))
+                                
+                                # Resize image to fit better in Excel cell
+                                target_height = 300  # pixels
+                                aspect_ratio = image.width / image.height
+                                target_width = int(target_height * aspect_ratio)
+                                image = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                                
+                                # Save resized image to bytes
+                                img_byte_arr = io.BytesIO()
+                                image.save(img_byte_arr, format='PNG')
+                                img_byte_arr.seek(0)
+                                
+                                # Add image to worksheet
+                                img = openpyxl.drawing.image.Image(img_byte_arr)
+                                img.anchor = f'A{i}'  # Position image in the first column
+                                worksheet.add_image(img)
+                                
+                                # Adjust row height to fit image
+                                worksheet.row_dimensions[i].height = 250  # Adjust as needed
+                                
+                            except Exception as e:
+                                worksheet[f'A{i}'] = f"Error adding image {i-1}: {str(e)}"
                     
-                    df = pd.DataFrame(data)
-                    df.to_excel(writer, index=False, sheet_name='Lecture Script')
-                    worksheet = writer.sheets['Lecture Script']
-                    
-                    # Insert a column for images
-                    worksheet.insert_cols(0)
-                    worksheet.column_dimensions['A'].width = 80  # Image column
-                    worksheet.column_dimensions['B'].width = 100  # Script column
-                    
-                    # Add column headers
-                    worksheet['A1'] = 'Slide'
-                    
-                    # Add images to the first column
-                    for i, img_base64 in enumerate(st.session_state.current_images, start=2):
-                        try:
-                            # Extract the actual base64 data from the data URL
-                            if ';base64,' in img_base64:
-                                img_base64 = img_base64.split(';base64,')[1]
-                            
-                            # Decode base64 image
-                            image_bytes = base64.b64decode(img_base64)
-                            image = Image.open(BytesIO(image_bytes))
-                            
-                            # Resize image to fit better in Excel cell
-                            target_height = 300  # pixels
-                            aspect_ratio = image.width / image.height
-                            target_width = int(target_height * aspect_ratio)
-                            image = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
-                            
-                            # Save resized image to bytes
-                            img_byte_arr = io.BytesIO()
-                            image.save(img_byte_arr, format='PNG')
-                            img_byte_arr.seek(0)
-                            
-                            # Add image to worksheet
-                            img = openpyxl.drawing.image.Image(img_byte_arr)
-                            img.anchor = f'A{i}'  # Position image in the first column
-                            worksheet.add_image(img)
-                            
-                            # Adjust row height to fit image
-                            worksheet.row_dimensions[i].height = 250  # Adjust as needed
-                            
-                        except Exception as e:
-                            worksheet[f'A{i}'] = f"Error adding image {i-1}: {str(e)}"
-                
-                # Prepare download button
-                output.seek(0)
-                st.sidebar.download_button(
-                    label="Export to Excel",
-                    data=output,
-                    file_name="lecture_script.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            except Exception as e:
-                st.sidebar.error(f"Error creating Excel file: {str(e)}")
+                    # Prepare download button
+                    output.seek(0)
+                    st.sidebar.download_button(
+                        label="Export to Excel",
+                        data=output,
+                        file_name="lecture_script.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                except Exception as e:
+                    st.sidebar.error(f"Error creating Excel file: {str(e)}")
 
     def validate_inputs(self) -> bool:
         """Validate input directories"""
