@@ -1,7 +1,7 @@
 # LongWriter-V: Enabling Ultra-Long and High-Fidelity Generation in Vision-Language Models
 
 <p align="center">
-    🤗 <a href="https://huggingface.co/datasets/THU-KEG/LongWriter-V-22K" target="_blank">HF Repo</a> • 📃 <a href="https://arxiv.org/abs/2502.14834" target="_blank">Paper</a>
+   🤗 <a href="https://huggingface.co/datasets/THU-KEG/LongWriter-V-22K" target="_blank">Train Dataset</a> • 🤗 <a href="https://huggingface.co/datasets/THU-KEG/MMLongBench-Write" target="_blank">Benchmark</a> • 🤗 <a href="https://huggingface.co/THU-KEG/LongWriter-V-7B-DPO" target="_blank">Model</a> • 📃 <a href="https://arxiv.org/abs/2502.14834" target="_blank">Paper</a>
 </p>
 
 ## 🔍 Table of Contents
