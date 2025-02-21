@@ -1,7 +1,7 @@
 # LongWriter-V: Enabling Ultra-Long and High-Fidelity Generation in Vision-Language Models
 
 <p align="center">
-    🤗 <a href="https://huggingface.co/datasets/THU-KEG/LongWriter-V-22K" target="_blank">HF Repo</a> • 📃 <a href="https://arxiv.org/abs/2408.07055" target="_blank">Paper</a>
+    🤗 <a href="https://huggingface.co/datasets/THU-KEG/LongWriter-V-22K" target="_blank">HF Repo</a> • 📃 <a href="https://arxiv.org/abs/2502.14834" target="_blank">Paper</a>
 </p>
 
 ## 🔍 Table of Contents
@@ -268,3 +268,15 @@ The educational potential of these tools is immense when used correctly. They ca
 ## 📝 Citation
 
 If you find our work useful, please kindly cite:
+
+```
+@misc{tu2025longwriterv,
+      title={LongWriter-V: Enabling Ultra-Long and High-Fidelity Generation in Vision-Language Models}, 
+      author={Shangqing Tu and Yucheng Wang and Daniel Zhang-Li and Yushi Bai and Jifan Yu and Yuhao Wu and Lei Hou and Huiqin Liu and Zhiyuan Liu and Bin Xu and Juanzi Li},
+      year={2025},
+      eprint={2502.14834},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2502.14834}, 
+}
+```
