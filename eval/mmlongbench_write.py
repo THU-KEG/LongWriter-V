@@ -13,13 +13,41 @@ from tqdm import tqdm
 class MMBenchWriteEvaluator(BaseEvaluator):
     """Evaluator for MMLongBench Write task"""
     def __init__(self, output_path, model_type='gpt-4o', method='vlm'):
-        super().__init__(None, output_path)  # No data_path needed as we use HF dataset
+        super().__init__(output_path) 
         self.model_type = model_type
         self.method = method
         self.cache_dir = "data/cache/MMLongBench-Write"
         os.makedirs(self.cache_dir, exist_ok=True)
         self._load_dataset()
         self._init_model()
+
+    def _initialize_data(self):
+        """Override parent's _initialize_data to load from HF dataset"""
+        if os.path.exists(self.output_path):
+            self.data = pd.read_excel(self.output_path)
+        else:
+            # Load dataset from Hugging Face
+            dataset = load_dataset("THU-KEG/MMLongBench-Write", split="train")
+            # Create DataFrame from dataset
+            self.data = pd.DataFrame({
+                'id': range(len(dataset)),
+                'question': dataset['question'],
+                'prediction': [None] * len(dataset)
+            })
+            
+        # Initialize evaluation columns
+        numeric_columns = ['length', 'length_score', 'relevance', 'accuracy', 'coherence', 
+                          'clarity', 'breadth_depth', 'reading_experience', 'overall_quality_score']
+        for col in numeric_columns:
+            if col not in self.data.columns:
+                self.data[col] = pd.Series(dtype='float64')
+            else:
+                self.data[col] = self.data[col].astype('float64')
+        
+        if 'quality_scores' not in self.data.columns:
+            self.data['quality_scores'] = pd.Series(dtype='object')
+        else:
+            self.data['quality_scores'] = self.data['quality_scores'].astype('object')
 
     def _load_dataset(self):
         """Load dataset from Hugging Face"""
@@ -61,8 +89,7 @@ class MMBenchWriteEvaluator(BaseEvaluator):
             
             # Cache image if not already cached
             if not os.path.exists(cache_path):
-                pil_image = Image.open(io.BytesIO(img['bytes']))
-                pil_image.save(cache_path)
+                img.save(cache_path)
             
             cache_paths.append(cache_path)
             
@@ -146,23 +173,25 @@ def main():
                       help='Model type to use for prediction')
     parser.add_argument('--method', type=str, choices=['vlm', 'caption_llm'], 
                       default='vlm', help='Method to use for prediction')
-    parser.add_argument('--output_path', type=str, 
-                      default='data/eval_res/MMLongBench_Write/model.xlsx',
-                      help='Path to the output file')
+
     args = parser.parse_args()
 
     # Update output path based on method and model
     method_dir = 'caption_llm' if args.method == 'caption_llm' else 'vlm'
-    args.output_path = f'data/eval_res/MMLongBench_Write/{method_dir}/{args.model}.xlsx'
+    output_dir = f'data/eval_res/MMLongBench_Write/{method_dir}'
+    output_path = os.path.join(output_dir, f'{args.model}.xlsx')
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
 
     evaluator = MMBenchWriteEvaluator(
-        output_path=args.output_path,
+        output_path=output_path,
         model_type=args.model,
         method=args.method
     )
     evaluator.run()
 
-    print_res({args.model: args.output_path})
+    print_res({args.model: output_path})
 
 if __name__ == "__main__":
     main() 

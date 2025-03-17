@@ -1,4 +1,5 @@
 import json
+import requests
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 from pymongo import MongoClient
@@ -19,6 +20,9 @@ class MongoCache:
     def get(self, key: str) -> Optional[tuple]:
         result = self.collection.find_one({"_id": key})
         return result["value"] if result else None
+    
+    def delete(self, key: str):
+        self.collection.delete_one({"_id": key})
 
     def __setitem__(self, key: str, value: tuple):
         self.collection.update_one(
@@ -117,6 +121,54 @@ class DeepSeek_Interface(GPT_Interface):
         base_url=config.deepseek_base_url
     )
 
+    @classmethod
+    def call_with_reasoning(cls, model, messages, use_cache=True, **kwargs):
+        """
+        Common helper method for GPT API calls with caching and retry logic
+        Returns: Tuple of (response_content, reasoning_content)
+        """
+        if cache is None:
+            use_cache = False
+            
+        if use_cache:
+            cache_key = cls._generate_cache_key(model, messages, **kwargs)
+            cached_result = cache.get(cache_key)
+            if cached_result is not None:
+                return cached_result
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            **kwargs           
+        }
+        headers = {
+            "Authorization": "Bearer " + config.deepseek_api_key,
+            "Content-Type": "application/json"
+        }
+        retries = 3
+        delay = 1.0
+        for attempt in range(retries):
+            try:
+                response = requests.post(config.deepseek_base_url + "/chat/completions", headers=headers, json=payload)
+                print(response.text)
+                response = response.json()
+                result = response["choices"][0]["message"]["content"]
+                reasoning = response["choices"][0]["message"]["reasoning_content"]
+                
+                if use_cache and cache is not None:
+                    cache_key = cls._generate_cache_key(model, messages, **kwargs)
+                    cache[cache_key] = (result, reasoning)
+                return result, reasoning
+                
+            except Exception as e:
+                if attempt == retries - 1 or "GPT refused to answer" in str(e):
+                    print(f"{model} API call failed: {str(e)}")
+                    raise e
+                else:
+                    print(f"Attempt {attempt + 1} failed, caused by {str(e)}, retrying in {delay} seconds...")
+                    time.sleep(delay)
+
 class VllmServer_Interface(GPT_Interface):
     client = OpenAI(
         api_key=config.vllm_api_key,
@@ -127,4 +179,16 @@ class Gemini_Interface(GPT_Interface):
     client = OpenAI(
         api_key=config.gemini_api_key,
         base_url=config.gemini_base_url
+    )
+
+class Qwen_Interface(GPT_Interface):
+    client = OpenAI(
+        api_key=config.qwen_api_key,
+        base_url=config.qwen_base_url
+    )
+
+class GLM_Interface(GPT_Interface):
+    client = OpenAI(
+        api_key=config.glm_api_key,
+        base_url=config.glm_base_url
     )

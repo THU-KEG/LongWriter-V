@@ -5,9 +5,10 @@ from qwen_vl_utils import process_vision_info
 from config import config
 
 class Qwen2_5_VL(Qwen2VL):
-    def __init__(self, model_path: str, **kwargs):
+    def __init__(self, model_path: str, model_type: str = None, **kwargs):
         super().__init__(model_path)
         self.load_kwargs = kwargs
+        self.model_type = model_type  # Store the model type for reference
 
     def _load(self):
         if self.model is None or self.processor is None:
@@ -61,5 +62,5 @@ class Qwen2_5_VL(Qwen2VL):
 
 def get_model(type):
     model_paths = config.model_paths["qwen2_5_vl"]
-    return Qwen2_5_VL(model_paths[type])
+    return Qwen2_5_VL(model_paths[type], model_type=type)
 
